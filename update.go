@@ -258,7 +258,13 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 	//
 	// Binary yang sedang berjalan tidak bisa menggantikan dirinya sendiri di
 	// dalam memori. Proses baru harus dijalankan, dan proses ini berhenti.
-	lapor("🚀 Memulai ulang bot dengan versi baru...")
+	// Pesan disesuaikan dengan kemampuan sebenarnya: bot PID 1 di container
+	// tidak bisa mengganti dirinya sendiri, jadi jangan menjanjikan restart.
+	if isPidSatu() {
+		lapor("📦 Memasang versi baru (restart container diperlukan setelahnya)...")
+	} else {
+		lapor("🚀 Memulai ulang bot dengan versi baru...")
+	}
 
 	if layananSystemdAktif() {
 		// Cara paling bersih: serahkan ke systemd (Restart=always).

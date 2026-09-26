@@ -267,13 +267,43 @@ func jalankanUpdateUnduh(dir string, onProgress func(string)) (sukses bool, pesa
 	// Dipisahkan dari unduhDanPasang supaya tahap unduh bisa diuji tanpa
 	// benar-benar menghentikan proses yang menjalankan test.
 	if onProgress != nil {
-		onProgress("🚀 Memulai ulang bot dengan versi baru...")
+		if isPidSatu() {
+			onProgress("📦 Memasang versi baru (restart container diperlukan setelahnya)...")
+		} else {
+			onProgress("🚀 Memulai ulang bot dengan versi baru...")
+		}
 	}
 
 	catatan := ""
 	if !hasil.terverifikasi {
 		catatan = "\n\n⚠️ <i>Checksum tidak tersedia di Release, " +
 			"jadi berkas tidak diverifikasi.</i>"
+	}
+
+	// ---- Kasus container: bot adalah PID 1 ---- //
+	//
+	// Di dalam container bot sering dijalankan sebagai proses utama, jadi
+	// PID 1. Proses seperti ini tidak bisa menggantikan dirinya sendiri:
+	// keluar berarti container mati, dan container tidak punya mekanisme
+	// untuk menjalankan perintah setelahnya.
+	//
+	// Yang lebih buruk: memulai proses baru di sini justru gagal. Proses lama
+	// masih hidup dan memegang kunci instance, jadi proses baru ditolak dan
+	// langsung keluar.
+	//
+	// Jadi lebih jujur melaporkan apa adanya — binary terpasang, tinggal
+	// container di-restart dari host — daripada mengirim "sedang restart"
+	// yang tidak akan terjadi.
+	if isPidSatu() {
+		return true, "✅ <b>Update berhasil dipasang.</b>\n\n" +
+			"Versi baru" + versiRingkasUpdate(hasil.versi) + " " +
+			"(<code>linux/" + hasil.arch + "</code>) sudah ada di disk.\n\n" +
+			"⚠️ <b>Tinggal satu langkah.</b>\n" +
+			"Bot ini berjalan sebagai proses utama container (<code>PID 1</code>), " +
+			"jadi ia tidak bisa mengganti dirinya sendiri.\n\n" +
+			"Restart container dari <b>host</b> (di luar container):\n" +
+			"<pre>docker restart " + htmlEscapeRingkas(namaContainer(), 60) + "</pre>\n" +
+			"Setelah itu kirim <code>/ping</code> untuk memastikan versi baru jalan." + catatan
 	}
 
 	if layananSystemdAktif() {
@@ -455,4 +485,42 @@ func versiRingkasUpdate(versi string) string {
 		return ""
 	}
 	return " <code>" + htmlEscapeRingkas(versi, 40) + "</code>"
+}
+
+// ==============================================================================
+// 🐳 DETEKSI CONTAINER
+// ==============================================================================
+
+// isPidSatu melaporkan apakah proses ini adalah proses utama container.
+//
+// Di dalam container, bot sering dijalankan sebagai PID 1. Proses seperti itu
+// tidak bisa menggantikan dirinya sendiri: keluar berarti container mati.
+//
+// Deteksi lewat PID sudah cukup dan tidak butuh berkas khusus — PID 1 di
+// container selalu proses yang dijalankan image, apa pun itu.
+func isPidSatu() bool {
+	return pidSaatIni() == 1
+}
+
+// pidSaatIni memisahkan pembacaan PID agar bisa diganti saat pengujian.
+//
+// Tanpa pemisahan ini, jalur PID 1 tidak bisa diuji sama sekali: test di
+// laptop selalu berjalan sebagai PID biasa, sehingga kode penanganan
+// container tidak pernah tersentuh — dan kerusakannya tidak terdeteksi.
+var pidSaatIni = os.Getpid
+
+// namaContainer menebak nama container untuk perintah restart di host.
+//
+// Hostname container secara default adalah ID container (12 karakter hex),
+// dan `docker restart` menerima ID itu. Jadi tebakan ini biasanya langsung
+// bisa dipakai tanpa perlu tahu nama yang diberikan saat `docker run`.
+//
+// Bila hostname diubah manual, tebakannya salah — tetapi perintahnya masih
+// memperlihatkan polanya, jadi pengguna tahu apa yang harus diganti.
+func namaContainer() string {
+	// Bila dijalankan docker-compose, hostname sering berupa nama service.
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "nama-container"
 }

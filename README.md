@@ -21,7 +21,7 @@ tanpa satu pun dependency eksternal.
 | 🪟 **Chat tidak menumpuk** | Satu pesan panel yang ditulis ulang, bukan pesan baru tiap perintah. |
 | 🎛️ **Menu tombol** | Tailscale, file manager, dan bantuan semuanya berbasis tombol — tanpa hafal perintah. |
 | 📦 **Upload tanpa batas 20MB** | Tiga cara melewati batas Bot API, termasuk unduh langsung dari URL. |
-| 🧪 **110 test** | Termasuk test keamanan: injeksi shell, path traversal, dan proses yatim. |
+| 🧪 **117 test** | Termasuk test keamanan: injeksi shell, path traversal, dan proses yatim. |
 
 ---
 
@@ -470,7 +470,7 @@ go vet ./...
 Panduan singkat:
 
 - **Satu fitur = satu file.** `terminal.go`, `upload.go`, `tailscale.go`.
-- **Setiap fitur baru wajib punya test.** Repo ini memegang standar itu: 110 test
+- **Setiap fitur baru wajib punya test.** Repo ini memegang standar itu: 117 test
   untuk ~5.800 baris kode.
 - **Jangan tambah dependency.** Nol dependency adalah fitur utama, bukan kebetulan.
   Kalau standard library bisa melakukannya, pakai standard library.

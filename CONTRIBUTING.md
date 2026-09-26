@@ -41,7 +41,7 @@ make check-deps      # akan menolak bila ada dependency masuk
 
 ### 3. Setiap fitur wajib punya test
 
-Project ini memegang standar itu: 110 test untuk ~5.800 baris kode.
+Project ini memegang standar itu: 117 test untuk ~5.800 baris kode.
 
 Test yang **benar-benar menguji**, bukan sekadar menambah coverage:
 

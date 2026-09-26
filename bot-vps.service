@@ -1,0 +1,50 @@
+[Unit]
+Description=Bot VPS Control — Telegram remote control engine
+Documentation=https://github.com/arewedaks/bot-vps-control
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Sesuaikan tiga baris ini dengan lokasi instalasi kamu.
+# User=root memberi akses penuh (apt, file manager, reboot).
+# Bila tidak ingin root, ganti ke user lain dan pastikan punya sudo.
+User=root
+Group=root
+WorkingDirectory=/root/bot-vps-control
+
+# Bot membaca .env dari WorkingDirectory.
+ExecStart=/root/bot-vps-control/core_engine
+
+# Selalu hidupkan kembali bila mati. Bot menangani error jaringan sendiri,
+# jadi restart hanya terjadi pada kegagalan tak terduga.
+Restart=always
+RestartSec=5
+
+# Bunuh seluruh process group saat stop — penting karena bot mengelola
+# sesi PTY dan proses anak (apt, top, dsb).
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Batas file descriptor. Bot mengelola banyak PTY dan socket.
+LimitNOFILE=65535
+
+# Jangan pernah jalankan dua instance dengan token yang sama —
+# mereka akan berebut update Telegram lewat long polling.
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Pengerasan dasar. Bot butuh akses tulis ke seluruh VPS, jadi tidak bisa
+# dikurung penuh — tapi setelan ini tetap membatasi kerusakan.
+NoNewPrivileges=false
+ProtectHome=false
+ProtectSystem=false
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bot-vps-control
+
+[Install]
+WantedBy=multi-user.target

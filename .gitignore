@@ -1,0 +1,63 @@
+# ==============================================================================
+# 🔐 RAHASIA — JANGAN PERNAH MASUK REPOSITORY
+# ==============================================================================
+# File ini memuat token bot Telegram dan User ID admin.
+# Token bot setara akses shell ke VPS: siapa pun yang memilikinya bisa
+# menjalankan perintah apa pun sebagai user bot tersebut.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ==============================================================================
+# 📦 BINARY HASIL BUILD
+# ==============================================================================
+# Jangan commit binary. Penerima clone harus build sendiri dari sumber,
+# supaya jelas kode apa yang jalan dan untuk arsitektur apa.
+core_engine
+core_engine.exe
+bot-vps-control
+/dist/
+*.exe
+
+# ==============================================================================
+# 🗄️ ARSIP
+# ==============================================================================
+*.zip
+*.tar.gz
+*.tar
+*.tgz
+*.7z
+!testdata/**/*.zip
+
+# ==============================================================================
+# 📝 BERKAS SEMENTARA & LOG
+# ==============================================================================
+*.log
+*.tmp
+*.out
+*.test
+*.prof
+.bvc_parts_*/
+
+# ==============================================================================
+# 🛠️ EDITOR & OS
+# ==============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==============================================================================
+# 🐍 PYTHON (main.py launcher)
+# ==============================================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/

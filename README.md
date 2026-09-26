@@ -21,7 +21,7 @@ tanpa satu pun dependency eksternal.
 | 🪟 **Chat tidak menumpuk** | Satu pesan panel yang ditulis ulang, bukan pesan baru tiap perintah. |
 | 🎛️ **Menu tombol** | Tailscale, file manager, dan bantuan semuanya berbasis tombol — tanpa hafal perintah. |
 | 📦 **Upload tanpa batas 20MB** | Tiga cara melewati batas Bot API, termasuk unduh langsung dari URL. |
-| 🧪 **161 test** | Termasuk test keamanan: injeksi shell, path traversal, dan proses yatim. |
+| 🧪 **168 test** | Termasuk test keamanan: injeksi shell, path traversal, dan proses yatim. |
 
 ---
 
@@ -538,6 +538,56 @@ Panduan singkat:
   Kalau standard library bisa melakukannya, pakai standard library.
 - **Jangan pernah commit `.env`** atau kredensial apa pun. Test
   `TestRepoBersihDariKredensial` akan menolaknya.
+
+---
+
+## 🩺 Bot menjawab mesin yang salah
+
+Gejala paling menipu: bot sudah di-deploy di VPS, tapi `/sysinfo` menjawab
+hostname, CPU, atau uptime komputer lain — biasanya komputer tempat bot pernah
+dites.
+
+**Sebabnya:** dua proses memakai token bot yang sama. Telegram *long polling*
+hanya memberikan satu update ke satu pemanggil `getUpdates`, jadi perintah kamu
+dibagi acak: sebagian dijawab VPS, sebagian dijawab komputer itu. Keduanya
+tampak sehat di log masing-masing, jadi tidak ada petunjuk yang mencurigakan.
+
+**Perbaikan:**
+
+```bash
+# Di KOMPUTER sendiri — cari dan hentikan
+pkill -x core_engine
+pgrep -x core_engine          # harus kosong
+
+# Di VPS — pastikan hanya satu
+pgrep -x core_engine          # harus tepat 1 angka
+systemctl restart bot-vps
+```
+
+Sejak dukungan kunci instance, bot **menolak start** bila token yang sama sudah
+dipakai, dengan pesan yang menyebut PID pemegangnya:
+
+```
+❌ Instance lain sudah memakai token bot ini (PID 12345).
+
+   Bot lain dengan token yang sama sudah berjalan.
+   Hentikan dulu, lalu jalankan yang ini:
+       pkill -x core_engine
+       systemctl restart bot-vps
+```
+
+Yang ditolak tidak mengirim notifikasi startup, jadi kamu tidak akan melihat
+dua notifikasi dari satu bot.
+
+### Gejala lain yang sering muncul
+
+| Gejala di log | Sebab | Perbaikan |
+| :--- | :--- | :--- |
+| `BOT_TOKEN tidak diset` | `.env` tidak di working dir | `ls -la /root/bot-vps-control/.env` |
+| `ADMIN_IDS tidak diset` | kosong atau bukan angka | isi User ID dari `@userinfobot` |
+| `Unauthorized` | token salah / sudah di-revoke | `/revoke` di `@BotFather`, pasang token baru |
+| jalan tapi tidak ada notifikasi | ID kamu tidak terdaftar | cek `ADMIN_IDS`, `systemctl restart bot-vps` |
+| `/update` gagal unduh | Release belum dibuat | `git tag v1.0.1 && git push origin v1.0.1` |
 
 ---
 

@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -364,8 +365,16 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 
 	st := bacaStatusUpdate()
 
-	// ---- Belum bisa update: bukan repository git ----
-	if !st.IsGitRepo {
+	// ---- Belum bisa update: bukan repository git, dan tidak bisa unduh ----
+	//
+	// Dua jalur update tidak sama kebutuhannya. Jalur unduh hanya butuh
+	// koneksi internet dan izin tulis — ia tidak menyentuh git sama sekali.
+	// Jadi bot yang dipasang dari binary (Docker, /app, hasil curl) tetap
+	// bisa update selama Releases tersedia.
+	//
+	// Memeriksa git lebih dulu akan menolak kasus yang justru paling butuh
+	// jalur unduh: VPS spek rendah yang tidak sanggup mengompilasi.
+	if !st.IsGitRepo && goTersedia() {
 		sendTelegram(chatID, "⚠️ <b>Update tidak tersedia.</b>\n\n"+
 			"Bot ini bukan hasil <code>git clone</code>, jadi tidak ada sumber untuk ditarik.\n\n"+
 			"Direktori: <code>"+htmlEscapeRingkas(st.Dir, 200)+"</code>\n\n"+
@@ -374,11 +383,61 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 		return
 	}
 
-	// ---- Belum ada remote ----
-	if st.Remote == "" {
+	// ---- Belum ada remote git (hanya berlaku bila jalur build dipakai) ----
+	if st.IsGitRepo && st.Remote == "" {
 		sendTelegram(chatID, "⚠️ <b>Tidak ada remote git.</b>\n\n"+
 			"Tambahkan sumber terlebih dahulu:\n"+
 			"<code>/term git remote add origin https://github.com/arewedaks/bot-vps-control.git</code>")
+		return
+	}
+
+	// ---- Bukan repo git: langsung ke jalur unduh ----
+	if !st.IsGitRepo {
+		// Jalur unduh tidak punya git untuk membandingkan versi, jadi
+		// versinya diambil dari GitHub Releases. Tanpa ini, /update cek di
+		// bot Docker akan menampilkan tawaran update tanpa bukti apa pun
+		// bahwa versi baru benar-benar ada.
+		versiRilis := versiTerbaruRilis(&http.Client{Timeout: 20 * time.Second})
+
+		if arg == "cek" {
+			pesan := "🔍 <b>Cek Update</b>\n" +
+				"━━━━━━━━━━━━━━━━━━━━\n" +
+				"<b>Metode:</b> " + metodeUpdate() + "\n"
+			if versiRilis == "" {
+				pesan += "\n⚠️ Tidak bisa membaca daftar rilis GitHub.\n" +
+					"Periksa koneksi internet VPS."
+			} else {
+				pesan += "<b>Versi terbaru:</b>" + versiRingkasUpdate(versiRilis) + "\n\n" +
+					"Ketik <code>/update confirm</code> untuk memasang."
+			}
+			sendTelegram(chatID, pesan)
+			return
+		}
+
+		if arg == "confirm" {
+			sendTelegram(chatID, "🔄 <b>Memulai update...</b>\n\n"+
+				"Metode: "+metodeUpdate()+"\n"+
+				"Bot tetap melayani sampai tahap terakhir.")
+			sukses, pesan := jalankanUpdateUnduh(st.Dir, func(tahap string) {
+				sendTelegram(chatID, tahap)
+			})
+			_ = sukses
+			sendTelegram(chatID, pesan)
+			return
+		}
+
+		pesan := "🔄 <b>Update Bot</b>\n" +
+			"━━━━━━━━━━━━━━━━━━━━\n" +
+			"Bot ini dipasang dari binary, bukan <code>git clone</code> — jadi update " +
+			"diambil langsung dari GitHub Releases. Tidak perlu git.\n\n" +
+			"<b>Direktori:</b> <code>" + htmlEscapeRingkas(st.Dir, 200) + "</code>\n" +
+			"<b>Metode:</b> " + metodeUpdate() + "\n"
+		if versiRilis != "" {
+			pesan += "<b>Versi terbaru:</b>" + versiRingkasUpdate(versiRilis) + "\n"
+		}
+		pesan += "\n<i>Bila gagal, binary lama tetap dipakai.</i>\n\n" +
+			"Ketik <code>/update confirm</code> untuk melanjutkan."
+		sendTelegram(chatID, pesan)
 		return
 	}
 

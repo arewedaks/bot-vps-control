@@ -2148,7 +2148,10 @@ func main() {
 
 	fmt.Println("==============================================================")
 	fmt.Println("🤖 Bot VPS Engine v3.0 (Interactive File Manager Edition)...")
-	fmt.Printf("🔑 Bot Token: %s...%s\n", BotToken[:7], BotToken[len(BotToken)-5:])
+	// Jangan pernah cetak token, bahkan sebagian: prefix token cukup untuk
+	// memverifikasi dugaan token orang lain. Yang berguna untuk diagnosis
+	// hanyalah panjangnya — itu menunjukkan token terpotong atau tidak.
+	fmt.Printf("🔑 Bot Token: terisi (%d karakter)\n", len(BotToken))
 	fmt.Printf("👑 Authorized Admins: %d user(s)\n", len(AdminIDs))
 	fmt.Println("==============================================================")
 
@@ -2195,14 +2198,17 @@ func main() {
 
 	// Verifikasi token SEBELUM mengklaim apa pun. Tanpa ini, bot akan bilang
 	// "notifikasi terkirim" padahal Telegram sudah menolak tokennya.
-	botName, botUser, err := telegramGetMe()
+	_, _, err := telegramGetMe()
 	if err != nil {
 		fmt.Printf("❌ Token bot ditolak Telegram: %v\n\n", err)
 		fmt.Println("   Periksa BOT_TOKEN di file .env.")
 		fmt.Println("   Bila token sudah di-revoke, buat baru di @BotFather.")
 		os.Exit(1)
 	}
-	fmt.Printf("🤖 Terhubung sebagai @%s (%s)\n", botUser, botName)
+	// Nama akun bot tidak perlu masuk log. Log sering diteruskan ke file,
+	// journald, atau layanan pengumpul log pihak ketiga — identitas akun
+	// tidak ada gunanya di sana dan hanya menambah permukaan bocor.
+	fmt.Println("🤖 Terhubung ke Telegram.")
 
 	for adminID := range AdminIDs {
 		sendTelegram(adminID, startupMsg)

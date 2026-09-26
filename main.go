@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,6 +81,14 @@ func loadConfig() {
 		fmt.Printf("🌐 Memakai Bot API kustom: %s\n", tampil)
 	} else {
 		ApiUrl = "https://api.telegram.org/bot" + BotToken
+	}
+
+	// Repositori sumber rilis untuk fitur /update jalur unduh.
+	// Bisa diganti bila memakai fork.
+	if repo := strings.TrimSpace(os.Getenv("UPDATE_REPO")); repo != "" {
+		repoTuanRumah = strings.TrimPrefix(repo, "https://github.com/")
+		repoTuanRumah = strings.TrimSuffix(repoTuanRumah, ".git")
+		repoTuanRumah = strings.Trim(repoTuanRumah, "/")
 	}
 
 	// Ambil Admin IDs
@@ -1712,12 +1721,26 @@ func sendSingleMessage(chatID int64, textHTML string, keyboard *InlineKeyboardMa
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	if err == nil {
-		resp.Body.Close()
+	if err != nil {
+		fmt.Printf("⚠️ Gagal kirim ke Telegram (chat %d): %v\n", chatID, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Telegram menolak pesan dengan status != 200 — biasanya karena HTML
+	// tidak valid atau teks terlalu panjang. Tanpa pemeriksaan ini,
+	// kegagalannya tidak terlihat sama sekali: pengguna hanya melihat
+	// "bot diam", padahal ada kesalahan yang bisa diperbaiki.
+	//
+	// Sangat penting untuk fitur update, karena keluaran git memuat
+	// karakter seperti < dan & yang harus di-escape dengan benar.
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 600))
+		fmt.Printf("⚠️ Telegram menolak pesan (chat %d, status %d): %s\n",
+			chatID, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 }
 
-// editTelegramMessage mengubah konten dan keyboard pesan yang sudah ada
 // editTelegramMessage menulis ulang isi pesan yang sudah ada.
 // Mengembalikan false bila edit gagal karena pesan tidak ada/lama.
 //
@@ -2031,15 +2054,70 @@ func downloadTelegramFile(fileID string, destPath string) (int64, error) {
 	return written, nil
 }
 
+// splitMessage memecah pesan panjang menjadi beberapa bagian.
+//
+// Telegram membatasi panjang pesan (~4096 karakter). Pemecahan tidak boleh
+// membelah sebuah tag HTML: bila tag terbuka di satu bagian dan tertutup di
+// bagian berikutnya, Telegram menolak KEDUA bagian dengan "can't parse
+// entities", sehingga pengguna tidak melihat apa pun.
+//
+// Karena itu pemotongan dilakukan di batas tag yang aman:
+//   - sebelum '<' dari tag berikutnya, sehingga tag utuh di satu bagian;
+//   - bila tidak ada batas yang cocok, potong di karakter aman terakhir
+//     agar tidak ada entitas yang terbelah di tengah.
+//
+// ponytail: hanya menangani batas tag, bukan penyeimbangan tag lintas
+// bagian. Bila kelak pesan dibangun dari tag bersarang yang tidak utuh per
+// bagian, tambahkan penutup/pembuka otomatis di sini.
 func splitMessage(msg string, chunkSize int) []string {
-	var chunks []string
+	if chunkSize <= 0 {
+		return []string{msg}
+	}
 	runes := []rune(msg)
-	for i := 0; i < len(runes); i += chunkSize {
-		end := i + chunkSize
-		if end > len(runes) {
-			end = len(runes)
+	if len(runes) <= chunkSize {
+		return []string{msg}
+	}
+
+	var chunks []string
+	for i := 0; i < len(runes); {
+		sisa := len(runes) - i
+		if sisa <= chunkSize {
+			chunks = append(chunks, string(runes[i:]))
+			break
 		}
+
+		end := i + chunkSize
+
+		// Mundur ke awal tag '<' terakhir agar tidak ada tag yang terbelah.
+		// Hanya dilakukan bila batasnya tidak terlalu jauh mundur, supaya
+		// bagian tetap mendekati ukuran yang diminta.
+		batasAman := -1
+		for j := end - 1; j > i && j > end-chunkSize/4; j-- {
+			if runes[j] == '<' {
+				batasAman = j
+				break
+			}
+		}
+		if batasAman > i {
+			end = batasAman
+		} else {
+			// Tidak ada tag di dekat batas. Mundur ke spasi terakhir agar
+			// kata tidak terbelah dua.
+			for j := end - 1; j > i; j-- {
+				if runes[j] == ' ' || runes[j] == '\n' {
+					end = j + 1
+					break
+				}
+			}
+		}
+
+		if end <= i {
+			// Jaring pengaman: jangan sampai tidak ada kemajuan.
+			end = minInt(i+chunkSize, len(runes))
+		}
+
 		chunks = append(chunks, string(runes[i:end]))
+		i = end
 	}
 	return chunks
 }
@@ -2048,6 +2126,24 @@ func splitMessage(msg string, chunkSize int) []string {
 // 🎯 MAIN ENGINE
 // ==============================================================================
 func main() {
+	// Pemeriksaan mandiri: memastikan binary ini benar-benar bisa jalan.
+	//
+	// Dipakai fitur update sebelum memasang binary baru — binary yang tidak
+	// bisa dijalankan akan tertangkap di sini, bukan setelah dipasang dan
+	// bot mati. Sengaja dijalankan SEBELUM loadConfig() supaya tidak
+	// memerlukan .env.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--cek", "-cek":
+			fmt.Println("ok")
+			return
+		case "--versi", "-versi", "--version", "-version":
+			fmt.Printf("bot-vps-control (%s/%s, %s)\n",
+				runtime.GOOS, runtime.GOARCH, runtime.Version())
+			return
+		}
+	}
+
 	loadConfig()
 
 	fmt.Println("==============================================================")
@@ -2636,6 +2732,9 @@ func main() {
 
 			case "/term", "/t", "/shell":
 				handleTerminalCommand(chatID, userID, rawText)
+
+			case "/update", "/upgrade":
+				handleUpdateCommand(chatID, userID, rawText)
 
 			case "/unduh", "/wget", "/download-url":
 				handleUnduhURL(chatID, userID, rawText)

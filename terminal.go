@@ -862,6 +862,7 @@ func helpText() string {
 		"⚙️ <b>Lainnya</b>\n" +
 		"• <code>/exec &lt;cmd&gt;</code> — perintah sekali jalan\n" +
 		"• <code>/ping</code> — cek bot hidup\n" +
+		"• <code>/update</code> — pasang versi terbaru (otomatis pilih cara)\n" +
 		"• <code>/reboot confirm</code> — restart VPS\n\n" +
 		"<i>Perintah lengkap: /commands</i>"
 }

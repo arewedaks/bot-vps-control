@@ -1,0 +1,84 @@
+name: Release
+
+# Membangun binary di GitHub, lalu menerbitkannya sebagai Release.
+#
+# Kenapa di GitHub dan bukan di VPS:
+#   - VPS spek rendah (RAM 512MB) sering gagal/kehabisan memori saat
+#     mengompilasi Go.
+#   - VPS tidak perlu memasang Go toolchain sama sekali.
+#   - Binary hasil GitHub konsisten: yang diuji di CI sama dengan yang dipasang.
+#
+# Alur pakai:
+#   git tag v1.0.0 && git push origin v1.0.0
+# Lalu di Telegram: /update
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Bisa dijalankan manual untuk menguji tanpa membuat tag.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Rilis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
+
+      # Test dulu — jangan sampai merilis binary yang rusak.
+      - name: Jalankan test
+        run: go test ./...
+
+      # Matriks arsitektur. Tambahkan di sini bila perlu arsitektur lain;
+      # update.go akan otomatis mencari nama yang cocok.
+      - name: Bangun binary
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          set -eu
+          mkdir -p dist
+          for arch in amd64 arm64 arm 386; do
+            echo "🔨 linux/$arch"
+            GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags="-s -w" -o "dist/core_engine-linux-$arch" .
+          done
+          ls -lh dist
+
+      # Checksum memungkinkan bot memverifikasi unduhan tidak rusak/diutak-atik.
+      - name: Buat checksum
+        run: |
+          cd dist
+          sha256sum core_engine-linux-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Terbitkan Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/core_engine-linux-*
+            dist/SHA256SUMS
+          generate_release_notes: true
+          body: |
+            Binary siap pakai untuk bot-vps-control.
+
+            Pasang di VPS tanpa perlu Go toolchain:
+
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | sh
+            ```
+
+            Atau update dari dalam bot Telegram: `/update`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

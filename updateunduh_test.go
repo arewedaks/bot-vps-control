@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -606,17 +605,4 @@ func TestJalurUnduhLengkapDenganServerTiruan(t *testing.T) {
 	}
 
 	t.Logf("✅ Alur unduh lengkap: %d byte, checksum cocok, binary lolos uji jalan", n)
-}
-
-// ujiBinary menjalankan binary dengan --cek, meniru langkah di updateunduh.go.
-//
-// Dipisahkan agar logikanya bisa diuji tanpa menjalankan seluruh update.
-func ujiBinary(path string, dir string) error {
-	cmd := exec.Command(path, "--cek")
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
 }

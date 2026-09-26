@@ -21,7 +21,7 @@ tanpa satu pun dependency eksternal.
 | 🪟 **Chat tidak menumpuk** | Satu pesan panel yang ditulis ulang, bukan pesan baru tiap perintah. |
 | 🎛️ **Menu tombol** | Tailscale, file manager, dan bantuan semuanya berbasis tombol — tanpa hafal perintah. |
 | 📦 **Upload tanpa batas 20MB** | Tiga cara melewati batas Bot API, termasuk unduh langsung dari URL. |
-| 🧪 **117 test** | Termasuk test keamanan: injeksi shell, path traversal, dan proses yatim. |
+| 🧪 **161 test** | Termasuk test keamanan: injeksi shell, path traversal, dan proses yatim. |
 
 ---
 
@@ -220,6 +220,9 @@ Perintah berikut tetap berfungsi tapi tidak ditampilkan agar `/help` tetap ringk
 | **`/mkdir <path>`** | Buat folder. Bisa juga lewat `/term mkdir`. |
 | **`/getfile <path>`** | Unduh file ke chat. Di file manager sudah ada tombol ⬇️. |
 | **`/status`**, **`/ps`**, **`/ports`** | Alias dari `/stats`, `/top`, `/net`. |
+| **`/update`** | Pasang versi terbaru. Lihat [Update mandiri](#-update-mandiri). |
+| **`/update cek`** | Periksa versi baru tanpa memasang. |
+| **`/update confirm`** | Pasang versi terbaru. |
 
 ### Upload file dari Telegram ke VPS
 
@@ -358,6 +361,7 @@ Beberapa admin bisa dipisahkan koma: `ADMIN_IDS=123456789,987654321`
 | :--- | :--- |
 | `API_URL` | Arahkan ke Local Bot API Server sendiri — batas upload naik dari 20MB ke 2GB |
 | `TELEGRAM_BOT_TOKEN` | Nama alternatif untuk `BOT_TOKEN` |
+| `UPDATE_REPO` | Repo sumber untuk `/update` jalur unduh, format `pemilik/repo`. Hanya perlu diisi bila memakai fork |
 
 ### Prioritas pembacaan
 
@@ -369,6 +373,56 @@ Bot **menolak berjalan** bila `BOT_TOKEN` atau `ADMIN_IDS` tidak ada, dengan
 pesan yang menjelaskan cara mengisinya.
 
 ---
+
+## ⬆️ Update mandiri
+
+`/update` memasang versi terbaru langsung dari Telegram. Bot memilih caranya
+sendiri berdasarkan isi VPS:
+
+| Jalur | Kapan dipakai | Yang terjadi |
+| :--- | :--- | :--- |
+| **⬇️ Unduh biner** | VPS **tidak punya** Go toolchain | Ambil binary jadi dari [GitHub Releases](https://github.com/arewedaks/bot-vps-control/releases), tanpa kompilasi |
+| **🔨 Kompilasi** | VPS **punya** Go toolchain | `git pull` lalu `go build` di VPS |
+
+`/update cek` menunjukkan jalur mana yang akan dipakai sebelum memasang.
+
+### Kenapa ada dua jalur
+
+VPS spek rendah (RAM 512MB, CPU 1 core) sering **kehabisan memori** saat
+mengompilasi Go, dan `go build` butuh waktu bermenit-menit di mesin seperti
+itu. Jalur unduh memindahkan pekerjaan berat itu ke GitHub Actions: VPS hanya
+mengunduh ±6MB lalu memasangnya. Update selesai dalam hitungan detik.
+
+Bila jalur unduh gagal — misalnya repo belum di-tag — bot **tidak langsung
+menyerah**: selama Go tersedia, ia beralih ke kompilasi lokal.
+
+### Keamanan
+
+Setiap tahap dilakukan **sebelum** binary lama disentuh, jadi setiap
+kegagalan meninggalkan bot tetap hidup:
+
+1. **Ukuran wajar** — unduhan terpotong ditolak (< 1MB).
+2. **Checksum SHA256** — dibandingkan dengan `SHA256SUMS` dari Release yang
+   sama. Menangkap unduhan rusak maupun yang diubah di tengah jalan.
+3. **Uji jalan** — binary baru dijalankan (`--cek`) sebelum dipasang.
+   Arsitektur yang salah tertangkap di sini, bukan setelah bot mati.
+4. **Pemasangan atomik** — `os.Rename`, jadi binary lama utuh bila gagal.
+
+### Untuk pemelihara: membuat Release
+
+Release dibangun otomatis oleh GitHub Actions saat tag didorong:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Workflow [`.github/workflows/release.yml`](.github/workflows/release.yml)
+membangun `linux/amd64`, `linux/arm64`, `linux/arm`, dan `linux/386`, lalu
+menerbitkannya sebagai Release lengkap dengan `SHA256SUMS`.
+
+Binary yang diterbitkan sudah diuji (`--cek` dan `--versi`) sebelum diunggah,
+jadi Release yang rusak tidak akan pernah terbit.
 
 ## 🧪 Testing
 
@@ -392,6 +446,14 @@ Yang diverifikasi test:
 - Sesi ditutup tanpa meninggalkan proses yatim.
 - Batas sesi ditegakkan (anti RAM bocor).
 - Escape sequence ANSI dibersihkan sebelum dikirim ke Telegram.
+
+Test jalur update memakai server HTTP tiruan, jadi **tidak butuh jaringan**.
+Test yang benar-benar mengunduh dari GitHub Releases dilewati secara default;
+jalankan dengan:
+
+```bash
+UNDUH_UJI=1 go test -run TestZZ -v .
+```
 
 ---
 

@@ -258,107 +258,20 @@ func panjangAman(s string, n int) string {
 // Mengembalikan (sukses, pesan) dengan format yang sama seperti jalankanUpdate,
 // sehingga handler Telegram bisa memakai keduanya tanpa perbedaan.
 func jalankanUpdateUnduh(dir string, onProgress func(string)) (sukses bool, pesan string) {
-	binPath := filepath.Join(dir, updateBinaryName)
-	tempPath := filepath.Join(dir, updateTempName)
-
-	lapor := func(s string) {
-		fmt.Println("⬇️ update:", s)
-		if onProgress != nil {
-			onProgress(s)
-		}
+	sukses, pesan, hasil := unduhDanPasang(dir, onProgress)
+	if !sukses {
+		return false, pesan
 	}
-
-	klien := &http.Client{Timeout: 120 * time.Second}
-
-	// ---- Tentukan arsitektur ---- //
-	// Ini yang membuat satu Release bisa dipakai semua VPS: nama berkas
-	// disusun dari arsitektur mesin yang sedang berjalan.
-	arch := namaArsitekturRilis(runtime.GOARCH)
-	if runtime.GOOS != "linux" {
-		return false, "❌ <b>Update unduh hanya untuk Linux.</b>\n\n" +
-			"Sistem ini: <code>" + htmlEscapeRingkas(runtime.GOOS+"/"+runtime.GOARCH, 40) + "</code>\n" +
-			"Pasang manual atau bangun dari sumber."
-	}
-
-	namaBerkas := "core_engine-linux-" + arch
-	lapor("⬇️ Mengunduh binary untuk <code>linux/" + arch + "</code>...")
-
-	versi := versiTerbaruRilis(klien)
-
-	// ---- Unduh binary ---- //
-	// Batas 64 MB: binary proyek ini ~7 MB, jadi ini longgar tapi tetap
-	// mencegah unduhan liar bila URL salah arah.
-	if _, err := ambilURL(klien, alamatRilis(versi, namaBerkas), tempPath, 64<<20); err != nil {
-		os.Remove(tempPath)
-		return false, "❌ <b>Gagal mengunduh binary.</b>\n\n" +
-			"Berkas: <code>" + htmlEscapeRingkas(namaBerkas, 60) + "</code>\n" +
-			"<pre>" + htmlEscapeRingkas(err.Error(), 400) + "</pre>\n\n" +
-			"Pastikan Release sudah dibuat:\n" +
-			"<code>git tag v1.0.0 &amp;&amp; git push origin v1.0.0</code>"
-	}
-
-	fi, err := os.Stat(tempPath)
-	if err != nil || fi.Size() < 1<<20 {
-		os.Remove(tempPath)
-		ukuran := int64(0)
-		if fi != nil {
-			ukuran = fi.Size()
-		}
-		return false, fmt.Sprintf("❌ <b>Berkas hasil unduhan tidak wajar.</b>\n\n"+
-			"Ukuran: %d byte (harusnya > 1 MB).\n"+
-			"Mungkin Release belum berisi binary.", ukuran)
-	}
-
-	// ---- Verifikasi checksum ---- //
-	// Ini pembeda penting: unduhan yang terpotong atau diubah di tengah
-	// jalan akan tertangkap di sini, bukan setelah dipasang.
-	lapor("🔐 Memeriksa keaslian berkas...")
-	daftar := bacaSHA256SuMS(klien, versi)
-
-	terverifikasi, pesanGagalChecksum := periksaChecksum(tempPath, namaBerkas, daftar)
-	if pesanGagalChecksum != "" {
-		os.Remove(tempPath)
-		return false, pesanGagalChecksum
-	}
-
-	// ---- Uji jalan sebelum dipasang ---- //
-	// Binary yang tidak bisa dijalankan (arsitektur salah, rusak) akan gagal
-	// di sini — sebelum menyentuh binary lama.
-	lapor("🧪 Menguji binary baru...")
-	if err := os.Chmod(tempPath, 0o755); err != nil {
-		os.Remove(tempPath)
-		return false, "❌ <b>Gagal memberi izin eksekusi.</b>\n<pre>" +
-			htmlEscapeRingkas(err.Error(), 300) + "</pre>"
-	}
-
-	uji := exec.Command(tempPath, "--cek")
-	uji.Dir = dir
-	if out, err := uji.CombinedOutput(); err != nil {
-		detail := strings.TrimSpace(string(out))
-		if detail == "" {
-			detail = err.Error()
-		}
-		os.Remove(tempPath)
-		return false, "❌ <b>Binary baru tidak bisa dijalankan.</b>\n\n" +
-			"Kemungkinan arsitektur tidak cocok, atau berkas rusak. " +
-			"Binary lama tetap dipakai.\n\n" +
-			"<pre>" + htmlEscapeRingkas(detail, 400) + "</pre>"
-	}
-
-	// ---- Pasang ---- //
-	lapor("♻️ Mengganti binary...")
-	if err := os.Rename(tempPath, binPath); err != nil {
-		os.Remove(tempPath)
-		return false, "❌ <b>Gagal memasang binary.</b>\n<pre>" +
-			htmlEscapeRingkas(err.Error(), 300) + "</pre>"
-	}
-	_ = os.Chmod(binPath, 0o755)
 
 	// ---- Restart ---- //
-	lapor("🚀 Memulai ulang bot dengan versi baru...")
+	// Dipisahkan dari unduhDanPasang supaya tahap unduh bisa diuji tanpa
+	// benar-benar menghentikan proses yang menjalankan test.
+	if onProgress != nil {
+		onProgress("🚀 Memulai ulang bot dengan versi baru...")
+	}
 
 	catatan := ""
-	if !terverifikasi {
+	if !hasil.terverifikasi {
 		catatan = "\n\n⚠️ <i>Checksum tidak tersedia di Release, " +
 			"jadi berkas tidak diverifikasi.</i>"
 	}
@@ -369,8 +282,8 @@ func jalankanUpdateUnduh(dir string, onProgress func(string)) (sukses bool, pesa
 			runBashCommand("systemctl restart "+namaLayananSystemd(), 30)
 		}()
 		return true, "✅ <b>Update berhasil.</b>\n\n" +
-			"Versi baru dipasang" + versiRingkasUpdate(versi) + " " +
-			"(<code>linux/" + arch + "</code>).\n" +
+			"Versi baru dipasang" + versiRingkasUpdate(hasil.versi) + " " +
+			"(<code>linux/" + hasil.arch + "</code>).\n" +
 			"Layanan sedang di-restart. Tunggu ±10 detik, lalu kirim <code>/ping</code>." +
 			catatan
 	}
@@ -395,9 +308,145 @@ func jalankanUpdateUnduh(dir string, onProgress func(string)) (sukses bool, pesa
 	}()
 
 	return true, "✅ <b>Update berhasil.</b>\n\n" +
-		"Versi baru dipasang" + versiRingkasUpdate(versi) + " " +
-		"(<code>linux/" + arch + "</code>).\n" +
+		"Versi baru dipasang" + versiRingkasUpdate(hasil.versi) + " " +
+		"(<code>linux/" + hasil.arch + "</code>).\n" +
 		"Proses baru sedang dijalankan — tunggu ±10 detik." + catatan
+}
+
+// hasilUnduh merangkum apa yang berhasil dipasang.
+type hasilUnduh struct {
+	versi         string // tag Release, mis. v1.0.0
+	arch          string // arsitektur yang dipasang
+	terverifikasi bool   // checksum cocok dengan SHA256SUMS resmi
+}
+
+// unduhDanPasang menjalankan tahap unduh sampai binary terpasang, tanpa
+// menyentuh proses yang sedang berjalan.
+//
+// Dipisahkan dari jalankanUpdateUnduh agar seluruh tahap ini bisa diuji tanpa
+// restart — kalau test memicu restart, test-nya sendiri yang mati.
+//
+// Urutan langkahnya sengaja begini: setiap pemeriksaan dilakukan SEBELUM
+// binary lama disentuh, jadi setiap kegagalan meninggalkan bot tetap hidup.
+func unduhDanPasang(dir string, onProgress func(string)) (bool, string, hasilUnduh) {
+	var hasil hasilUnduh
+
+	binPath := filepath.Join(dir, updateBinaryName)
+	tempPath := filepath.Join(dir, updateTempName)
+
+	lapor := func(s string) {
+		fmt.Println("⬇️ update:", s)
+		if onProgress != nil {
+			onProgress(s)
+		}
+	}
+
+	klien := &http.Client{Timeout: 120 * time.Second}
+
+	// ---- Tentukan arsitektur ---- //
+	// Ini yang membuat satu Release bisa dipakai semua VPS: nama berkas
+	// disusun dari arsitektur mesin yang sedang berjalan.
+	arch := namaArsitekturRilis(runtime.GOARCH)
+	if runtime.GOOS != "linux" {
+		return false, "❌ <b>Update unduh hanya untuk Linux.</b>\n\n" +
+			"Sistem ini: <code>" + htmlEscapeRingkas(runtime.GOOS+"/"+runtime.GOARCH, 40) + "</code>\n" +
+			"Pasang manual atau bangun dari sumber.", hasil
+	}
+
+	hasil.arch = arch
+	namaBerkas := "core_engine-linux-" + arch
+	lapor("⬇️ Mengunduh binary untuk <code>linux/" + arch + "</code>...")
+
+	versi := versiTerbaruRilis(klien)
+	hasil.versi = versi
+
+	// ---- Unduh binary ---- //
+	// Batas 64 MB: binary proyek ini ~7 MB, jadi ini longgar tapi tetap
+	// mencegah unduhan liar bila URL salah arah.
+	if _, err := ambilURL(klien, alamatRilis(versi, namaBerkas), tempPath, 64<<20); err != nil {
+		os.Remove(tempPath)
+		return false, "❌ <b>Gagal mengunduh binary.</b>\n\n" +
+			"Berkas: <code>" + htmlEscapeRingkas(namaBerkas, 60) + "</code>\n" +
+			"<pre>" + htmlEscapeRingkas(err.Error(), 400) + "</pre>\n\n" +
+			"Pastikan Release sudah dibuat:\n" +
+			"<code>git tag v1.0.0 &amp;&amp; git push origin v1.0.0</code>", hasil
+	}
+
+	fi, err := os.Stat(tempPath)
+	if err != nil || fi.Size() < 1<<20 {
+		os.Remove(tempPath)
+		ukuran := int64(0)
+		if fi != nil {
+			ukuran = fi.Size()
+		}
+		return false, fmt.Sprintf("❌ <b>Berkas hasil unduhan tidak wajar.</b>\n\n"+
+			"Ukuran: %d byte (harusnya > 1 MB).\n"+
+			"Mungkin Release belum berisi binary.", ukuran), hasil
+	}
+
+	// ---- Verifikasi checksum ---- //
+	// Ini pembeda penting: unduhan yang terpotong atau diubah di tengah
+	// jalan akan tertangkap di sini, bukan setelah dipasang.
+	lapor("🔐 Memeriksa keaslian berkas...")
+	daftar := bacaSHA256SuMS(klien, versi)
+
+	terverifikasi, pesanGagalChecksum := periksaChecksum(tempPath, namaBerkas, daftar)
+	if pesanGagalChecksum != "" {
+		os.Remove(tempPath)
+		return false, pesanGagalChecksum, hasil
+	}
+	hasil.terverifikasi = terverifikasi
+
+	// ---- Uji jalan sebelum dipasang ---- //
+	// Binary yang tidak bisa dijalankan (arsitektur salah, rusak) akan gagal
+	// di sini — sebelum menyentuh binary lama.
+	lapor("🧪 Menguji binary baru...")
+	if err := os.Chmod(tempPath, 0o755); err != nil {
+		os.Remove(tempPath)
+		return false, "❌ <b>Gagal memberi izin eksekusi.</b>\n<pre>" +
+			htmlEscapeRingkas(err.Error(), 300) + "</pre>", hasil
+	}
+
+	if err := ujiBinary(tempPath, dir); err != nil {
+		os.Remove(tempPath)
+		return false, "❌ <b>Binary baru tidak bisa dijalankan.</b>\n\n" +
+			"Kemungkinan arsitektur tidak cocok, atau berkas rusak. " +
+			"Binary lama tetap dipakai.\n\n" +
+			"<pre>" + htmlEscapeRingkas(err.Error(), 400) + "</pre>", hasil
+	}
+
+	// ---- Pasang ---- //
+	// os.Rename bersifat atomik di filesystem yang sama: pembaca melihat
+	// binary lama atau binary baru, tidak pernah campuran keduanya.
+	lapor("♻️ Mengganti binary...")
+	if err := os.Rename(tempPath, binPath); err != nil {
+		os.Remove(tempPath)
+		return false, "❌ <b>Gagal memasang binary.</b>\n<pre>" +
+			htmlEscapeRingkas(err.Error(), 300) + "</pre>", hasil
+	}
+	_ = os.Chmod(binPath, 0o755)
+
+	return true, "", hasil
+}
+
+// ujiBinary menjalankan binary dengan --cek untuk memastikan ia benar-benar
+// bisa dijalankan di mesin ini.
+//
+// Ini lapisan kedua setelah checksum: berkas bisa lolos checksum karena
+// Release-nya sendiri salah (arsitektur berbeda), tapi tetap tidak bisa
+// dijalankan di sini.
+func ujiBinary(path string, dir string) error {
+	uji := exec.Command(path, "--cek")
+	uji.Dir = dir
+	out, err := uji.CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(out))
+		if detail == "" {
+			detail = err.Error()
+		}
+		return fmt.Errorf("%s", detail)
+	}
+	return nil
 }
 
 // versiRingkasUpdate memformat tag versi untuk ditampilkan.

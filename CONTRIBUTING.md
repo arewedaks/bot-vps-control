@@ -5,11 +5,8 @@ akses penuh, jadi kualitas dan keamanan dijaga ketat.
 
 ## Sebelum mulai
 
-> Repository ini **privat**. Kamu perlu diberi akses oleh pemilik repo.
-
 ```bash
-# Clone — GitHub CLI menangani autentikasi repo privat secara otomatis
-gh repo clone arewedaks/bot-vps-control
+git clone https://github.com/arewedaks/bot-vps-control.git
 cd bot-vps-control
 
 cp .env.example .env      # isi BOT_TOKEN dan ADMIN_IDS untuk uji manual

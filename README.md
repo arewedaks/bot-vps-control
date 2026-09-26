@@ -6,7 +6,7 @@ tanpa satu pun dependency eksternal.
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](go.mod)
-[![Tests](https://img.shields.io/badge/tests-110%20passing-brightgreen)](#-testing)
+[![CI](https://github.com/arewedaks/bot-vps-control/actions/workflows/ci.yml/badge.svg)](https://github.com/arewedaks/bot-vps-control/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-linux-lightgrey)](#)
 
@@ -79,13 +79,9 @@ Shell **persisten** dengan TTY asli — bukan sekadar eksekusi perintah sekali j
 
 ## 🚀 Mulai Cepat
 
-> **Repository privat.** Kamu perlu akses ke repo ini dari akun GitHub yang
-> diberi izin. Clone pertama akan meminta autentikasi.
-
 ```bash
-# 1. Clone (butuh akses ke repo privat)
-#    Cara termudah pakai GitHub CLI — otomatis menangani autentikasi:
-gh repo clone arewedaks/bot-vps-control
+# 1. Clone
+git clone https://github.com/arewedaks/bot-vps-control.git
 cd bot-vps-control
 
 # 2. Konfigurasi

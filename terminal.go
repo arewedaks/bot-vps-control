@@ -855,14 +855,18 @@ func helpText() string {
 		"• <code>/ip</code> — IP publik, lokal, Tailscale\n\n" +
 		"📤 <b>Upload &amp; Unduh</b>\n" +
 		"• <code>/fm</code> → tombol 📤 Upload ke Sini (maks 20MB)\n" +
-		"• <code>/unduh &lt;URL&gt;</code> — unduh file besar langsung di VPS\n" +
-		"• <code>/chunk</code> — upload bertahap (file &gt;20MB)\n\n" +
+		"• <code>/unduh &lt;URL&gt;</code> — unduh file besar di VPS\n" +
+		"• 📦 Upload Besar — tombol untuk file &gt;20MB (<code>/chunk</code>)\n\n" +
+		"🚀 <b>Deploy Bot</b> <i>(jalankan bot lain di sini)</i>\n" +
+		"• <code>/deploy</code> — panel deploy per-proyek\n" +
+		"• Python · Node · <b>Go</b> · <b>Binary</b> · Shell, otomatis\n" +
+		"• Sumber: berkas, URL, atau GitHub\n\n" +
 		"🦎 <b>VPN</b>\n" +
 		"• <code>/ts</code> — menu Tailscale (tombol interaktif)\n\n" +
 		"⚙️ <b>Lainnya</b>\n" +
 		"• <code>/exec &lt;cmd&gt;</code> — perintah sekali jalan\n" +
 		"• <code>/ping</code> — cek bot hidup\n" +
-		"• <code>/update</code> — pasang versi terbaru (otomatis pilih cara)\n" +
+		"• <code>/update</code> — pasang versi terbaru (otomatis)\n" +
 		"• <code>/reboot confirm</code> — restart VPS\n\n" +
 		"<i>Perintah lengkap: /commands</i>"
 }
@@ -882,6 +886,9 @@ func helpKeyboard() *InlineKeyboardMarkup {
 			{
 				{Text: "🦎 Tailscale", CallbackData: "hp:x"},
 				{Text: "📦 Upload Besar", CallbackData: "hp:u"},
+			},
+			{
+				{Text: "🚀 Deploy Bot", CallbackData: "hp:d"},
 			},
 			{
 				{Text: "📋 Semua Perintah", CallbackData: "hp:a"},
@@ -936,6 +943,11 @@ func commandsPlainText() string {
 		"<code>/ts ip</code> — IP Tailscale & hostname\n" +
 		"<code>/ts ssh on|off</code> — aktif/nonaktif Tailscale SSH\n" +
 		"<code>/ts down confirm</code> — putuskan (butuh konfirmasi)\n\n" +
+		"🚀 <b>Deploy Bot</b> <i>(menu tombol)</i>\n" +
+		"<code>/deploy</code> — buka panel deploy per-proyek\n" +
+		"<i>Bahasa: Python · Node.js · Go · Binary · Shell (otomatis)</i>\n" +
+		"<i>Sumber: kirim berkas, URL, atau pemilik/repo GitHub</i>\n" +
+		"<i>Kontrol: Start · Stop · Restart · Log · Bahasa · Entry Point · Hapus</i>\n\n" +
 		"⚙️ <b>Kontrol</b>\n" +
 		"<code>/exec &lt;cmd&gt;</code> — perintah sekali jalan (tanpa state)\n" +
 		"<code>/reboot confirm</code> — restart VPS"

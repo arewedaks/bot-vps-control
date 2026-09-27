@@ -2288,6 +2288,13 @@ func main() {
 				}
 
 				// Parser format callback: fm:<action>:<id>:<extra>
+				if strings.HasPrefix(data, "dp:") {
+					if DeployTanganiCallback(userID, chatID, msgID, data) {
+						answerCallbackQuery(cb.ID, "")
+					}
+					continue
+				}
+
 				if strings.HasPrefix(data, "ub:") {
 					action := strings.TrimPrefix(data, "ub:")
 					setPanelMessage(userID, chatID, msgID)
@@ -2347,6 +2354,12 @@ func main() {
 						setPanelMessage(userID, chatID, msgID)
 						text, kb := renderBantuanUploadBesar("")
 						updatePanel(userID, chatID, text, kb)
+
+					case "d": // Menu Deploy Bot
+						answerCallbackQuery(cb.ID, "")
+						setPanelMessage(userID, chatID, msgID)
+						teksDeploy, kbDeploy := menuDeployUtama(userID)
+						updatePanel(userID, chatID, teksDeploy, kbDeploy)
 
 					case "a": // Semua perintah
 						answerCallbackQuery(cb.ID, "")
@@ -2563,12 +2576,25 @@ func main() {
 			// 📁 HANDLE UPLOAD DOKUMEN / FILE DARI USER TELEGRAM KE VPS
 			// ==================================================================
 			if u.Message.Document != nil {
+				// Panel deploy menerima berkas lebih dulu saat sedang menunggu.
+				// Tanpa pemeriksaan ini, berkas deploy akan jatuh ke file manager
+				// biasa dan proyek tidak pernah terbentuk.
+				if DeployMenerimaDokumen(chatID, userID, u.Message.Document) {
+					continue
+				}
 				handleDocumentUpload(chatID, userID, u.Message.Document, caption)
 				continue
 			}
 
 			// Abaikan pesan jika tidak ada teks
 			if rawText == "" {
+				continue
+			}
+
+			// Panel deploy memakai teks untuk URL, alamat GitHub, dan nama entry
+			// point. Diperiksa sebelum perintah agar alamat berisi "/" tidak
+			// ditafsirkan sebagai slash command.
+			if DeployMenerimaTeks(chatID, userID, rawText) {
 				continue
 			}
 
@@ -2587,6 +2613,11 @@ func main() {
 			switch cmdLower {
 			case "/start", "/help":
 				sendTelegramWithKeyboard(chatID, helpText(), helpKeyboard())
+
+			case "/deploy", "/panel", "/apps":
+				setPanelMessage(userID, chatID, 0)
+				teks, kb := menuDeployUtama(userID)
+				sendTelegramWithKeyboard(chatID, teks, kb)
 
 			case "/commands":
 				sendTelegram(chatID, commandsPlainText())

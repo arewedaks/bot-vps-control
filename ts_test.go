@@ -260,6 +260,7 @@ func TestSetiapTombolHelpPunyaHandler(t *testing.T) {
 		"hp:y": true, // sysinfo
 		"hp:x": true, // tailscale
 		"hp:u": true, // panduan upload besar
+		"hp:d": true, // panel deploy bot
 		"hp:a": true, // semua perintah
 		"hp:b": true, // kembali ke bantuan
 	}

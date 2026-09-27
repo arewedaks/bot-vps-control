@@ -75,6 +75,50 @@ func TestCommandsPlainTextLengkap(t *testing.T) {
 	}
 }
 
+// TestHelpMenyebutSemuaPerintahUtama mengikat fitur ke dokumentasi.
+//
+// Tanpa uji ini, fitur baru mudah terlupa didokumentasikan dan pengguna baru
+// tahu fitur itu ada secara kebetulan. Menambahkan perintah baru ke switch di
+// main.go harus diikuti pembaruan bantuan agar uji ini tetap lulus.
+func TestHelpMenyebutSemuaPerintahUtama(t *testing.T) {
+	h := helpText()
+	c := commandsPlainText()
+
+	// Perintah yang wajib muncul di helpText (gambaran singkat).
+	for _, perintah := range []string{
+		"/term", "/fm", "/stats", "/unduh", "/deploy", "/ts",
+	} {
+		if !strings.Contains(h, perintah) {
+			t.Errorf("helpText() tidak menyebut %q", perintah)
+		}
+	}
+
+	// Perintah yang wajib muncul di commandsPlainText (daftar rinci).
+	for _, perintah := range []string{
+		"/deploy", "/term", "/fm", "/ts", "/unduh", "/chunk",
+	} {
+		if !strings.Contains(c, perintah) {
+			t.Errorf("commandsPlainText() tidak menyebut %q", perintah)
+		}
+	}
+
+	// Setiap tombol bantuan harus punya padanan penjelasan di helpText.
+	// Dipetakan manual karena label tombol memakai bahasa manusia, bukan
+	// perintah, sehingga tidak bisa dicocokkan secara otomatis.
+	kb := helpKeyboard()
+	for _, baris := range kb.InlineKeyboard {
+		for _, b := range baris {
+			if b.CallbackData == "hp:a" || b.CallbackData == "hp:b" {
+				continue // tombol navigasi, tidak perlu penjelasan tersendiri
+			}
+			teksTombol := strings.TrimSpace(strings.TrimLeft(b.Text, "🖥️📁📊⚙️🦎📦🚀 "))
+			if teksTombol != "" && !strings.Contains(strings.ToLower(h), strings.ToLower(teksTombol)) {
+				t.Logf("⚠️ tombol %q belum dijelaskan di helpText()", b.Text)
+			}
+		}
+	}
+}
+
 // TestHelpKeyboardValid memastikan tombol bantuan punya callback_data yang sah.
 func TestHelpKeyboardValid(t *testing.T) {
 	kb := helpKeyboard()

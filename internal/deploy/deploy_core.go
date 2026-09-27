@@ -1,4 +1,4 @@
-package main
+package deploy
 
 // ==============================================================================
 // 🚀 DEPLOY BOT — PANEL DEPLOY MANDIRI

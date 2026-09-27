@@ -1,4 +1,4 @@
-package main
+package deploy
 
 // Uji panel deploy. Fokus pada hal yang bisa menghancurkan VPS bila salah:
 // pembersihan nama, penolakan path traversal, dan pengenalan bahasa.
@@ -698,7 +698,7 @@ func TestMenuDeployUtamaTidakPanik(t *testing.T) {
 	DirDeploy = t.TempDir()
 	defer func() { DirDeploy = dirAsli }()
 
-	teks, kb := menuDeployUtama(555)
+	teks, kb := MenuDeployUtama(555)
 	if teks == "" {
 		t.Error("teks menu kosong")
 	}

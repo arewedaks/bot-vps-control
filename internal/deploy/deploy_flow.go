@@ -1,4 +1,4 @@
-package main
+package deploy
 
 // ==============================================================================
 // 🚀 DEPLOY BOT — HANDLER
@@ -15,6 +15,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bot-vps-control/internal/tg"
 	"bot-vps-control/internal/update"
 	"compress/gzip"
 	"fmt"
@@ -43,7 +44,7 @@ var (
 //
 // Dipanggil lebih dulu oleh handleDocumentUpload. Bila langkah percakapan
 // deploy sedang aktif, berkas ditangani di sini dan pemanggil harus berhenti.
-func DeployMenerimaDokumen(chatID int64, userID int64, doc *Document) bool {
+func DeployMenerimaDokumen(chatID int64, userID int64, doc *tg.Document) bool {
 	langkah, aktif := ambilLangkahDeploy(userID)
 	if !aktif {
 		return false
@@ -58,7 +59,7 @@ func DeployMenerimaDokumen(chatID int64, userID int64, doc *Document) bool {
 }
 
 // prosesTerimaBerkas mengunduh berkas dari Telegram dan menaruhnya ke direktori proyek.
-func prosesTerimaBerkas(chatID int64, userID int64, doc *Document, pesanID int64) {
+func prosesTerimaBerkas(chatID int64, userID int64, doc *tg.Document, pesanID int64) {
 	if doc == nil {
 		return
 	}
@@ -112,7 +113,7 @@ func prosesTerimaBerkas(chatID int64, userID int64, doc *Document, pesanID int64
 	balasPanel(chatID, pesanID,
 		"<b><i>Mengunduh:</i></b> ▓▓▓▓▓░░░░░ 50%", nil)
 
-	ukuran, err := downloadTelegramFile(doc.FileID, tmp)
+	ukuran, err := tg.DownloadTelegramFile(doc.FileID, tmp)
 	if err != nil {
 		os.Remove(tmp)
 		balasPanel(chatID, pesanID,
@@ -495,7 +496,7 @@ func unduhKeBerkas(url string, tujuan string, batas int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", "bot-vps-control/deploy")
+	req.Header.Set("tg.User-Agent", "bot-vps-control/deploy")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -938,24 +939,24 @@ func dedupString(masukan []string) []string {
 
 // balasPanel menulis teks ke pesan panel, atau mengirim pesan baru bila panel
 // belum ada. Keyboard nil berarti tombol lama dibiarkan apa adanya.
-func balasPanel(chatID int64, pesanID int64, teks string, kb *InlineKeyboardMarkup) {
+func balasPanel(chatID int64, pesanID int64, teks string, kb *tg.InlineKeyboardMarkup) {
 	if pesanID > 0 {
-		if editTelegramMessage(chatID, pesanID, teks, kb) {
+		if tg.EditTelegramMessage(chatID, pesanID, teks, kb) {
 			return
 		}
 		// Sebagian pesan tidak bisa disunting (terlalu lama, atau sudah
 		// dihapus). Pesan baru lebih baik daripada tidak ada balasan.
 		if kb != nil {
-			sendTelegramWithKeyboard(chatID, teks, kb)
+			tg.SendTelegramWithKeyboard(chatID, teks, kb)
 		} else {
-			sendTelegram(chatID, teks)
+			tg.SendTelegram(chatID, teks)
 		}
 		return
 	}
 	if kb != nil {
-		sendTelegramWithKeyboard(chatID, teks, kb)
+		tg.SendTelegramWithKeyboard(chatID, teks, kb)
 	} else {
-		sendTelegram(chatID, teks)
+		tg.SendTelegram(chatID, teks)
 	}
 }
 
@@ -966,8 +967,8 @@ func kirimKesalahanDeploy(chatID int64, pesanID int64, judul string, rincian str
 	balasPanel(chatID, pesanID, teks, kbKembaliDeploy())
 }
 
-func kbKembaliDeploy() *InlineKeyboardMarkup {
-	return &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+func kbKembaliDeploy() *tg.InlineKeyboardMarkup {
+	return &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{
 			{Text: "🚀 Panel Deploy", CallbackData: "dp:m"},
 			{Text: "🔙 Utama", CallbackData: "hp:h"},
@@ -1051,22 +1052,22 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 	switch aksi {
 	case "m": // Menu utama deploy
-		teks, kb := menuDeployUtama(userID)
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		teks, kb := MenuDeployUtama(userID)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "mk": // Panduan deploy baru
 		setLangkahDeploy(userID, langkahDeploy{Aksi: "mk", Pesan: pesanID})
 		teks, kb := panduanDeployBaru()
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "u": // Minta URL
 		setLangkahDeploy(userID, langkahDeploy{Aksi: "unduh", Pesan: pesanID})
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID,
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID,
 			"━━━━━━━━━━━━━━━━━━━━━━━\n"+
 				"      🔗 <b>DEPLOY DARI URL</b> 🔗\n"+
 				"━━━━━━━━━━━━━━━━━━━━━━━\n"+
@@ -1081,8 +1082,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 	case "g": // Minta alamat GitHub
 		setLangkahDeploy(userID, langkahDeploy{Aksi: "git", Pesan: pesanID})
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID,
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID,
 			"━━━━━━━━━━━━━━━━━━━━━━━\n"+
 				"      🐙 <b>DEPLOY DARI GITHUB</b> 🐙\n"+
 				"━━━━━━━━━━━━━━━━━━━━━━━\n"+
@@ -1102,8 +1103,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 			halaman, _ = strconv.Atoi(potongan[1])
 		}
 		teks, kb := daftarProyekPanel(userID, halaman)
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "c": // Panel kontrol proyek
@@ -1112,8 +1113,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		}
 		nama := namaProyekAman(potongan[1])
 		teks, kb := panelKontrolDeploy(userID, nama)
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "run", "rst": // Start / Restart
@@ -1121,7 +1122,7 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 			return true
 		}
 		nama := namaProyekAman(potongan[1])
-		setPanelMessage(userID, chatID, pesanID)
+		tg.SetPanelMessage(userID, chatID, pesanID)
 
 		ok, pesan := jalankanProyekDeploy(userID, nama)
 		if !ok {
@@ -1131,7 +1132,7 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 		teks, kb := panelKontrolDeploy(userID, nama)
 		teks = "✅ <b>Proyek dinyalakan.</b>\n\n" + teks
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "stop": // Stop
@@ -1139,13 +1140,13 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 			return true
 		}
 		nama := namaProyekAman(potongan[1])
-		setPanelMessage(userID, chatID, pesanID)
+		tg.SetPanelMessage(userID, chatID, pesanID)
 
 		matikanProsesDeploy(namaProsesDeploy(userID, nama))
 
 		teks, kb := panelKontrolDeploy(userID, nama)
 		teks = "🛑 <b>Proyek dihentikan.</b>\n\n" + teks
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "log": // Lihat log
@@ -1164,7 +1165,7 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 			"<pre>" + update.HtmlEscapeRingkas(isi, 2600) + "</pre>"
 
-		kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+		kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 			{
 				{Text: "🔄 Refresh", CallbackData: "dp:log:" + nama},
 				{Text: "🗑 Bersihkan", CallbackData: "dp:logclr:" + nama},
@@ -1173,8 +1174,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 				{Text: "🔙 Kembali", CallbackData: "dp:c:" + nama},
 			},
 		}}
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "logclr": // Kosongkan log
@@ -1183,10 +1184,10 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		}
 		nama := namaProyekAman(potongan[1])
 		os.Truncate(berkasLogDeploy(namaProsesDeploy(userID, nama)), 0)
-		answerCallbackQuery("", "🗑 Log dibersihkan.")
+		tg.AnswerCallbackQuery("", "🗑 Log dibersihkan.")
 		teks, kb := panelKontrolDeploy(userID, nama)
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "lang": // Pilih bahasa
@@ -1195,8 +1196,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		}
 		nama := namaProyekAman(potongan[1])
 		teks, kb := panelPilihBahasa(userID, nama)
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "setlang": // Tetapkan bahasa
@@ -1226,8 +1227,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 		teks, kb := panelKontrolDeploy(userID, nama)
 		teks = "✅ <b>Bahasa diperbarui.</b>\n\n" + teks
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "setent": // Pilih entry point dari daftar
@@ -1236,8 +1237,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		}
 		nama := namaProyekAman(potongan[1])
 		teks, kb := panelPilihEntry(userID, nama)
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "setentry": // Tetapkan entry point
@@ -1250,11 +1251,11 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 		// Periksa ulang: nilai berasal dari callback_data yang bisa dipalsukan.
 		if !amanDiDalam(dir, filepath.Join(dir, entry)) {
-			answerCallbackQuery("", "⛔ Nama berkas tidak valid.")
+			tg.AnswerCallbackQuery("", "⛔ Nama berkas tidak valid.")
 			return true
 		}
 		if _, err := os.Stat(filepath.Join(dir, entry)); err != nil {
-			answerCallbackQuery("", "⛔ Berkas tidak ditemukan.")
+			tg.AnswerCallbackQuery("", "⛔ Berkas tidak ditemukan.")
 			return true
 		}
 
@@ -1266,8 +1267,8 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 		teks, kb := panelKontrolDeploy(userID, nama)
 		teks = "✅ <b>Entry point disetel.</b>\n\n" + teks
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 
 	case "del": // Konfirmasi hapus
@@ -1276,14 +1277,14 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		}
 		nama := namaProyekAman(potongan[1])
 
-		kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+		kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 			{
 				{Text: "🗑 Ya, Hapus", CallbackData: "dp:del2:" + nama},
 				{Text: "❌ Batal", CallbackData: "dp:c:" + nama},
 			},
 		}}
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID,
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID,
 			"⚠️ <b>KONFIRMASI HAPUS</b> ⚠️\n\n"+
 				"Proyek <code>"+update.HtmlEscapeRingkas(nama, 40)+"</code> akan dihapus\n"+
 				"beserta seluruh berkasnya.\n\n"+
@@ -1305,16 +1306,16 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 
 		teks, kb := daftarProyekPanel(userID, 0)
 		teks = "🗑 <b>Proyek dihapus.</b>\n\n" + teks
-		setPanelMessage(userID, chatID, pesanID)
-		editTelegramMessage(chatID, pesanID, teks, kb)
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
 	}
 
 	return false
 }
 
-func kbBatalDeploy() *InlineKeyboardMarkup {
-	return &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+func kbBatalDeploy() *tg.InlineKeyboardMarkup {
+	return &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{{Text: "🔙 Batal", CallbackData: "dp:m"}},
 	}}
 }

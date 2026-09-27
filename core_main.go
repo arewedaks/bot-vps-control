@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bot-vps-control/internal/deploy"
 	"bot-vps-control/internal/shell"
 	"bot-vps-control/internal/tg"
 	"bot-vps-control/internal/update"
@@ -371,95 +372,17 @@ var runBashCommand = shell.Run
 // shellQuote likewise — lihat runBashCommand.
 var shellQuote = shell.Quote
 
-// ==============================================================================
-// 🪟 PANEL TUNGGAL — MENCEGAH CHAT PENUH
-// ==============================================================================
-//
-// Masalah: setiap perintah /term sebelumnya mengirim pesan BARU, sehingga chat
-// penuh setelah beberapa perintah. Solusinya sama seperti file manager: satu
-// pesan "panel" per admin yang isinya ditulis ulang (editMessageText).
-//
-// Aturan:
-//   - Output panjang (hasil perintah, panel terminal) → SELALU ke panel.
-//   - Pesan singkat (konfirmasi, error) → kirim sekali, dan hapus pesan
-//     panel lama supaya tidak menumpuk.
-//   - Notifikasi penting (startup, reboot) → tetap pesan baru.
-
-type panelState struct {
-	MessageID int64
-	ChatID    int64
-}
-
+// Panel tunggal: alias ke internal/tg. Bertahan sementara supaya file fitur
+// yang belum dipindah tidak harus diubah semua sekaligus.
 var (
-	panelMu     sync.Mutex
-	panelByUser = make(map[int64]*panelState)
+	setPanelMessage = tg.SetPanelMessage
+	getPanelMessage = tg.GetPanelMessage
+	sendPanel       = tg.SendPanel
+	updatePanel     = tg.UpdatePanel
+	clearPanel      = tg.ClearPanel
+	deletePanel     = tg.DeletePanel
+	sendOnce        = tg.SendOnce
 )
-
-// setPanelMessage mencatat pesan mana yang dipakai sebagai panel untuk admin.
-func setPanelMessage(userID, chatID, msgID int64) {
-	panelMu.Lock()
-	panelByUser[userID] = &panelState{MessageID: msgID, ChatID: chatID}
-	panelMu.Unlock()
-}
-
-// getPanelMessage mengambil panel aktif milik admin.
-func getPanelMessage(userID int64) (int64, int64, bool) {
-	panelMu.Lock()
-	defer panelMu.Unlock()
-	p, ok := panelByUser[userID]
-	if !ok {
-		return 0, 0, false
-	}
-	return p.MessageID, p.ChatID, true
-}
-
-// sendPanel mengirim panel BARU dan mengingatnya. Dipakai saat belum ada panel.
-func sendPanel(userID, chatID int64, text string, kb *InlineKeyboardMarkup) {
-	msgID := sendMessageReturningID(chatID, text, kb)
-	if msgID > 0 {
-		setPanelMessage(userID, chatID, msgID)
-	}
-}
-
-// updatePanel menulis ulang panel yang ada. Bila belum ada panel, buat baru.
-// Ini yang membuat chat tidak penuh: satu pesan, ditulis ulang terus.
-func updatePanel(userID, chatID int64, text string, kb *InlineKeyboardMarkup) {
-	msgID, _, ok := getPanelMessage(userID)
-	if !ok {
-		sendPanel(userID, chatID, text, kb)
-		return
-	}
-	if !editTelegramMessage(chatID, msgID, text, kb) {
-		// Pesan sudah dihapus / terlalu lama → kirim panel baru.
-		clearPanel(userID)
-		sendPanel(userID, chatID, text, kb)
-	}
-}
-
-// clearPanel melupakan panel (mis. setelah dihapus atau sesi ditutup).
-func clearPanel(userID int64) {
-	panelMu.Lock()
-	delete(panelByUser, userID)
-	panelMu.Unlock()
-}
-
-// deletePanel menghapus pesan panel dan melupakannya. Dipakai sebelum
-// mengirim pesan singkat supaya chat tidak menumpuk pesan lama.
-func deletePanel(userID int64) {
-	msgID, chatID, ok := getPanelMessage(userID)
-	if !ok {
-		return
-	}
-	deleteTelegramMessage(chatID, msgID)
-	clearPanel(userID)
-}
-
-// sendOnce mengirim pesan singkat: hapus panel lama, kirim pesan ini sekali.
-// Hasilnya chat tetap bersih — hanya pesan terbaru yang terlihat.
-func sendOnce(userID, chatID int64, text string) {
-	deletePanel(userID)
-	sendTelegram(chatID, text)
-}
 
 // ==============================================================================
 // 🖥️ TERMINAL UI RENDERER (Level 3 — PTY Interaktif)
@@ -597,16 +520,8 @@ func listDirectory(targetDir string) ([]FileItem, error) {
 
 const itemsPerPage = 8
 
-func getHomeDir() string {
-	usr, err := user.Current()
-	if err == nil && usr.HomeDir != "" {
-		return usr.HomeDir
-	}
-	if h := os.Getenv("HOME"); h != "" {
-		return h
-	}
-	return "/root"
-}
+// getHomeDir adalah alias ke internal/shell — lihat runBashCommand.
+var getHomeDir = shell.GetHomeDir
 
 func renderFileManager(currentPath string, page int) (string, *InlineKeyboardMarkup) {
 	absPath, err := filepath.Abs(currentPath)
@@ -1780,7 +1695,7 @@ func main() {
 
 				// Parser format callback: fm:<action>:<id>:<extra>
 				if strings.HasPrefix(data, "dp:") {
-					if DeployTanganiCallback(userID, chatID, msgID, data) {
+					if deploy.DeployTanganiCallback(userID, chatID, msgID, data) {
 						answerCallbackQuery(cb.ID, "")
 					}
 					continue
@@ -1849,7 +1764,7 @@ func main() {
 					case "d": // Menu Deploy Bot
 						answerCallbackQuery(cb.ID, "")
 						setPanelMessage(userID, chatID, msgID)
-						teksDeploy, kbDeploy := menuDeployUtama(userID)
+						teksDeploy, kbDeploy := deploy.MenuDeployUtama(userID)
 						updatePanel(userID, chatID, teksDeploy, kbDeploy)
 
 					case "a": // Semua perintah
@@ -2070,7 +1985,7 @@ func main() {
 				// Panel deploy menerima berkas lebih dulu saat sedang menunggu.
 				// Tanpa pemeriksaan ini, berkas deploy akan jatuh ke file manager
 				// biasa dan proyek tidak pernah terbentuk.
-				if DeployMenerimaDokumen(chatID, userID, u.Message.Document) {
+				if deploy.DeployMenerimaDokumen(chatID, userID, u.Message.Document) {
 					continue
 				}
 				handleDocumentUpload(chatID, userID, u.Message.Document, caption)
@@ -2085,7 +2000,7 @@ func main() {
 			// Panel deploy memakai teks untuk URL, alamat GitHub, dan nama entry
 			// point. Diperiksa sebelum perintah agar alamat berisi "/" tidak
 			// ditafsirkan sebagai slash command.
-			if DeployMenerimaTeks(chatID, userID, rawText) {
+			if deploy.DeployMenerimaTeks(chatID, userID, rawText) {
 				continue
 			}
 
@@ -2107,7 +2022,7 @@ func main() {
 
 			case "/deploy", "/panel", "/apps":
 				setPanelMessage(userID, chatID, 0)
-				teks, kb := menuDeployUtama(userID)
+				teks, kb := deploy.MenuDeployUtama(userID)
 				sendTelegramWithKeyboard(chatID, teks, kb)
 
 			case "/commands":

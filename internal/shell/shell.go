@@ -12,7 +12,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"os/user"
 	"strings"
 	"syscall"
 	"time"
@@ -71,4 +73,19 @@ func Run(cmdStr string, timeoutSec int) (exitCode int, stdout, stderr string) {
 // lebih buruk, menjadi injeksi perintah.
 func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// GetHomeDir mengembalikan direktori home pengguna yang sedang berjalan.
+//
+// Dipakai untuk menentukan lokasi default yang tidak boleh di-root: data
+// deploy, state terminal, berkas sementara. Urutan: os/user lebih_can
+// dipercaya daripada env, karena env bisa salah atau dikosongkan di service.
+func GetHomeDir() string {
+	if usr, err := user.Current(); err == nil && usr.HomeDir != "" {
+		return usr.HomeDir
+	}
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return "/root"
 }

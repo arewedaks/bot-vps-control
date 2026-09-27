@@ -1,4 +1,4 @@
-package main
+package deploy
 
 // ==============================================================================
 // 🚀 DEPLOY BOT — ANTARMUKA MENU
@@ -24,6 +24,8 @@ package main
 //   dp:setent:<nama> → mulai mode tentukan entry point
 
 import (
+	"bot-vps-control/internal/shell"
+	"bot-vps-control/internal/tg"
 	"bot-vps-control/internal/update"
 	"fmt"
 	"os"
@@ -87,7 +89,7 @@ func hapusLangkahDeploy(userID int64) {
 // ==============================================================================
 
 // menuDeployUtama menampilkan pintu masuk panel deploy.
-func menuDeployUtama(userID int64) (string, *InlineKeyboardMarkup) {
+func MenuDeployUtama(userID int64) (string, *tg.InlineKeyboardMarkup) {
 	proyek := daftarProyekDeploy(userID)
 	aktif := prosesAktifDeploy(userID)
 
@@ -107,7 +109,7 @@ func menuDeployUtama(userID int64) (string, *InlineKeyboardMarkup) {
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"<i>Deploy bot baru per-proyek, kelola terpisah dari bot utama.</i>"
 
-	kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+	kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{
 			{Text: "➕ Deploy Baru", CallbackData: "dp:mk"},
 			{Text: "📂 Daftar Proyek", CallbackData: "dp:l:0"},
@@ -127,7 +129,7 @@ func menuDeployUtama(userID int64) (string, *InlineKeyboardMarkup) {
 
 // htmlEscapeDir menyingkat jalur direktori agar tidak memenuhi layar.
 func htmlEscapeDir(userID int64) string {
-	home := getHomeDir()
+	home := shell.GetHomeDir()
 	dir := filepath.Join(DirDeploy, strconv.FormatInt(userID, 10))
 	if home != "" {
 		if rel, err := filepath.Rel(home, dir); err == nil && !strings.HasPrefix(rel, "..") {
@@ -138,7 +140,7 @@ func htmlEscapeDir(userID int64) string {
 }
 
 // panduanDeployBaru menjelaskan tiga cara menambah proyek.
-func panduanDeployBaru() (string, *InlineKeyboardMarkup) {
+func panduanDeployBaru() (string, *tg.InlineKeyboardMarkup) {
 	teks := "━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"      📥 <b>DEPLOY BARU</b> 📥\n" +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -152,7 +154,7 @@ func panduanDeployBaru() (string, *InlineKeyboardMarkup) {
 		"Bahasa dikenali otomatis:\n" +
 		"🐍 Python · 🟢 Node.js · 🔵 Go · ⚙️ Binary · 📜 Shell"
 
-	kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+	kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{
 			{Text: "🔗 Kirim URL", CallbackData: "dp:u:0"},
 			{Text: "🐙 GitHub", CallbackData: "dp:g"},
@@ -166,7 +168,7 @@ func panduanDeployBaru() (string, *InlineKeyboardMarkup) {
 }
 
 // daftarProyekPanel menampilkan daftar proyek dengan navigasi halaman.
-func daftarProyekPanel(userID int64, halaman int) (string, *InlineKeyboardMarkup) {
+func daftarProyekPanel(userID int64, halaman int) (string, *tg.InlineKeyboardMarkup) {
 	proyek := daftarProyekDeploy(userID)
 	aktif := prosesAktifDeploy(userID)
 
@@ -176,7 +178,7 @@ func daftarProyekPanel(userID int64, halaman int) (string, *InlineKeyboardMarkup
 			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 			"<i>Belum ada proyek.</i>\n\n" +
 			"Kirim berkas, tautan, atau alamat GitHub untuk memulai."
-		kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+		kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 			{{Text: "➕ Deploy Baru", CallbackData: "dp:mk"}},
 			{{Text: "🔙 Kembali", CallbackData: "dp:m"}},
 		}}
@@ -203,7 +205,7 @@ func daftarProyekPanel(userID int64, halaman int) (string, *InlineKeyboardMarkup
 	b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━\n")
 	fmt.Fprintf(&b, "<i>Halaman %d dari %d</i>\n\n", halaman+1, totalHalaman)
 
-	var baris [][]InlineKeyboardButton
+	var baris [][]tg.InlineKeyboardButton
 
 	for _, nama := range proyek[mulai:akhir] {
 		ikon := "🔴"
@@ -216,31 +218,31 @@ func daftarProyekPanel(userID int64, halaman int) (string, *InlineKeyboardMarkup
 		fmt.Fprintf(&b, "%s <code>%s</code>\n└─➤ <i>%s</i>\n",
 			ikon, update.HtmlEscapeRingkas(nama, 32), update.HtmlEscapeRingkas(label, 20))
 
-		baris = append(baris, []InlineKeyboardButton{{
+		baris = append(baris, []tg.InlineKeyboardButton{{
 			Text:         ikon + " " + nama,
 			CallbackData: "dp:c:" + nama,
 		}})
 	}
 
 	// Navigasi halaman.
-	var nav []InlineKeyboardButton
+	var nav []tg.InlineKeyboardButton
 	if halaman > 0 {
-		nav = append(nav, InlineKeyboardButton{
+		nav = append(nav, tg.InlineKeyboardButton{
 			Text: "⬅️", CallbackData: fmt.Sprintf("dp:l:%d", halaman-1)})
 	}
-	nav = append(nav, InlineKeyboardButton{
+	nav = append(nav, tg.InlineKeyboardButton{
 		Text: "🔙 Kembali", CallbackData: "dp:m"})
 	if halaman < totalHalaman-1 {
-		nav = append(nav, InlineKeyboardButton{
+		nav = append(nav, tg.InlineKeyboardButton{
 			Text: "➡️", CallbackData: fmt.Sprintf("dp:l:%d", halaman+1)})
 	}
 	baris = append(baris, nav)
 
-	return b.String(), &InlineKeyboardMarkup{InlineKeyboard: baris}
+	return b.String(), &tg.InlineKeyboardMarkup{InlineKeyboard: baris}
 }
 
 // panelKontrolDeploy menampilkan status satu proyek beserta tombol kendalinya.
-func panelKontrolDeploy(userID int64, nama string) (string, *InlineKeyboardMarkup) {
+func panelKontrolDeploy(userID int64, nama string) (string, *tg.InlineKeyboardMarkup) {
 	dir := filepath.Join(dirDeployPenggunaWajib(userID), nama)
 	st := infoProsesDeploy(userID, nama)
 	bahasa := deteksiBahasa(dir)
@@ -268,19 +270,19 @@ func panelKontrolDeploy(userID int64, nama string) (string, *InlineKeyboardMarku
 		fmt.Sprintf("⚙️ <code>CPU      : %s</code>\n", st.CPU) +
 		"━━━━━━━━━━━━━━━━━━━━━━━"
 
-	var kendali []InlineKeyboardButton
+	var kendali []tg.InlineKeyboardButton
 	if st.Jalan {
-		kendali = []InlineKeyboardButton{
+		kendali = []tg.InlineKeyboardButton{
 			{Text: "🛑 Stop", CallbackData: "dp:stop:" + nama},
 			{Text: "🔄 Restart", CallbackData: "dp:rst:" + nama},
 		}
 	} else {
-		kendali = []InlineKeyboardButton{
+		kendali = []tg.InlineKeyboardButton{
 			{Text: "▶️ Start", CallbackData: "dp:run:" + nama},
 		}
 	}
 
-	kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+	kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		kendali,
 		{
 			{Text: "📜 Log", CallbackData: "dp:log:" + nama},
@@ -309,7 +311,7 @@ func statusDeploy(st statusProsesDeploy) string {
 //
 // Berguna saat tebakan otomatis salah, misalnya proyek berisi binary sekaligus
 // beberapa skrip bantu, atau nama berkas tidak mengikuti kebiasaan umum.
-func panelPilihBahasa(userID int64, nama string) (string, *InlineKeyboardMarkup) {
+func panelPilihBahasa(userID int64, nama string) (string, *tg.InlineKeyboardMarkup) {
 	dir := filepath.Join(dirDeployPenggunaWajib(userID), nama)
 	sekarang := deteksiBahasa(dir)
 	manual := bacaPenanda(dir, penandaBahasaDeploy)
@@ -327,7 +329,7 @@ func panelPilihBahasa(userID int64, nama string) (string, *InlineKeyboardMarkup)
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"<i>Tentukan manual bila deteksi otomatis keliru.</i>"
 
-	kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+	kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{
 			{Text: "🐍 Python", CallbackData: "dp:setlang:" + nama + ":python"},
 			{Text: "🟢 Node.js", CallbackData: "dp:setlang:" + nama + ":node"},
@@ -349,7 +351,7 @@ func panelPilihBahasa(userID int64, nama string) (string, *InlineKeyboardMarkup)
 }
 
 // panelPilihEntry menampilkan daftar berkas untuk dipilih sebagai entry point.
-func panelPilihEntry(userID int64, nama string) (string, *InlineKeyboardMarkup) {
+func panelPilihEntry(userID int64, nama string) (string, *tg.InlineKeyboardMarkup) {
 	dir := filepath.Join(dirDeployPenggunaWajib(userID), nama)
 
 	entries, err := os.ReadDir(dir)
@@ -370,8 +372,8 @@ func panelPilihEntry(userID int64, nama string) (string, *InlineKeyboardMarkup) 
 	b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━\n")
 	b.WriteString("<i>Pilih berkas yang akan dijalankan.</i>")
 
-	var baris [][]InlineKeyboardButton
-	var nav []InlineKeyboardButton
+	var baris [][]tg.InlineKeyboardButton
+	var nav []tg.InlineKeyboardButton
 
 	// Batasi agar keyboard tidak melebihi batas Telegram.
 	maks := 12
@@ -393,7 +395,7 @@ func panelPilihEntry(userID int64, nama string) (string, *InlineKeyboardMarkup) 
 		if e.Name() == sekarang {
 			tanda = "✅ "
 		}
-		baris = append(baris, []InlineKeyboardButton{{
+		baris = append(baris, []tg.InlineKeyboardButton{{
 			Text:         tanda + e.Name(),
 			CallbackData: "dp:setentry:" + nama + ":" + e.Name(),
 		}})
@@ -403,11 +405,11 @@ func panelPilihEntry(userID int64, nama string) (string, *InlineKeyboardMarkup) 
 		b.WriteString("\n\n⚠️ <i>Tidak ada berkas yang cocok untuk bahasa ini.</i>")
 	}
 
-	nav = append(nav, InlineKeyboardButton{
+	nav = append(nav, tg.InlineKeyboardButton{
 		Text: "🔙 Kembali", CallbackData: "dp:c:" + nama})
 	baris = append(baris, nav)
 
-	return b.String(), &InlineKeyboardMarkup{InlineKeyboard: baris}
+	return b.String(), &tg.InlineKeyboardMarkup{InlineKeyboard: baris}
 }
 
 // berkasLayakEntry menyaring berkas yang masuk akal jadi entry point.
@@ -429,8 +431,8 @@ func berkasLayakEntry(nama string, bahasa string) bool {
 	return true
 }
 
-func kbKembaliKontrol(nama string) *InlineKeyboardMarkup {
-	return &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+func kbKembaliKontrol(nama string) *tg.InlineKeyboardMarkup {
+	return &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{{Text: "🔙 Kembali", CallbackData: "dp:c:" + nama}},
 	}}
 }
@@ -440,7 +442,7 @@ func kbKembaliKontrol(nama string) *InlineKeyboardMarkup {
 // ==============================================================================
 
 // laporanHasilDeploy menyusun pesan sesudah deploy selesai.
-func laporanHasilDeploy(userID int64, nama string) (string, *InlineKeyboardMarkup) {
+func laporanHasilDeploy(userID int64, nama string) (string, *tg.InlineKeyboardMarkup) {
 	dir := filepath.Join(dirDeployPenggunaWajib(userID), nama)
 	bahasa := deteksiBahasa(dir)
 	entry := cariEntrypoint(dir, bahasa)
@@ -475,7 +477,7 @@ func laporanHasilDeploy(userID int64, nama string) (string, *InlineKeyboardMarku
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"<i>Tekan Start untuk menjalankan.</i>"
 
-	kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+	kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{
 			{Text: "▶️ Start", CallbackData: "dp:run:" + nama},
 			{Text: "🛠️ Kontrol", CallbackData: "dp:c:" + nama},

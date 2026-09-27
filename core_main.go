@@ -39,9 +39,18 @@ import (
 // Ini disengaja. Token bot Telegram setara akses shell ke VPS, jadi tidak
 // boleh ikut ke repository.
 
+// Versi harus sama persis dengan tag GitHub: /update membandingkan nomor ini
+// lewat tag Release, jadi kalau melenceng, bot laptau dirinya sudah kadaluarsa
+// atau menahan update yang seharusnya masuk.
+// ponytail: masih di-hardcode. Kalau nanti ada CI yang meng-*inject* nomor ini
+// lewat -ldflags -X, konstanta ini pindah ke sana — jangan tambah konfigurasi
+// manual sebelum itu benar-benar ada.
+const Versi = "v1.1.2"
+
 var (
 	BotToken string
 	ApiUrl   string
+
 	AdminIDs map[int64]bool
 )
 
@@ -1242,7 +1251,7 @@ func main() {
 	loadConfig()
 
 	fmt.Println("==============================================================")
-	fmt.Println("🤖 Bot VPS Engine v3.0 (Interactive File Manager Edition)...")
+	fmt.Printf("🤖 Bot VPS Engine %s (Interactive File Manager Edition)...\n", Versi)
 	// Jangan pernah cetak token, bahkan sebagian: prefix token cukup untuk
 	// memverifikasi dugaan token orang lain. Yang berguna untuk diagnosis
 	// hanyalah panjangnya — itu menunjukkan token terpotong atau tidak.
@@ -1271,7 +1280,7 @@ func main() {
 
 	// Kirim Notifikasi Startup ke Semua Admin Terdaftar
 	startupMsg := fmt.Sprintf(
-		"🚀 <b>Bot VPS Control Engine v3.0 Aktif!</b>\n\n"+
+		"🚀 <b>Bot VPS Control Engine "+Versi+" Aktif!</b>\n\n"+
 			"🌐 <b>Public IP:</b> <code>%s</code>\n"+
 			"🏠 <b>Local IP:</b> <code>%s</code>\n"+
 			"%s"+

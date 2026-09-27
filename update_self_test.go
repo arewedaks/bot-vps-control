@@ -298,9 +298,9 @@ func TestLayananSystemdAktifTidakPanik(t *testing.T) {
 // error "undefined", karena project ini memakai banyak file dalam satu paket.
 // Setiap update akan gagal total.
 func TestPerintahBuildMemakaiPaketPenuh(t *testing.T) {
-	data, err := os.ReadFile("update.go")
+	data, err := os.ReadFile("update_self.go")
 	if err != nil {
-		t.Fatalf("baca update.go: %v", err)
+		t.Fatalf("baca update_self.go: %v", err)
 	}
 	sumber := string(data)
 
@@ -318,9 +318,9 @@ func TestPerintahBuildMemakaiPaketPenuh(t *testing.T) {
 // Binary hasil update harus identik dengan hasil `make build`, agar ukuran dan
 // simbil debug tidak berbeda antar versi.
 func TestBuildFlagSamaDenganMakefile(t *testing.T) {
-	data, err := os.ReadFile("update.go")
+	data, err := os.ReadFile("update_self.go")
 	if err != nil {
-		t.Fatalf("baca update.go: %v", err)
+		t.Fatalf("baca update_self.go: %v", err)
 	}
 	sumber := string(data)
 

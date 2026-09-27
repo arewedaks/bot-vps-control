@@ -9,11 +9,7 @@ import (
 // TestTombolUploadPunyaHandler memastikan tombol baru di file manager
 // benar-benar ditangani — mencegah tombol mati.
 func TestTombolUploadPunyaHandler(t *testing.T) {
-	sumber, err := os.ReadFile("main.go")
-	if err != nil {
-		t.Fatalf("baca main.go: %v", err)
-	}
-	kode := string(sumber)
+	kode := sumberGoJoining(t)
 
 	// Handler yang harus ada untuk tombol-tombol baru.
 	wajib := map[string]string{
@@ -56,11 +52,13 @@ func TestPrefixCallbackTidakBentrok(t *testing.T) {
 
 // TestUploadHandlerTerdaftar memastikan handler dokumen memakai modul upload.
 func TestUploadHandlerTerdaftar(t *testing.T) {
-	mainKode, err := os.ReadFile("main.go")
+	// Di sini pemisahan file tetap perlu: yang diuji bukan hanya pola ada,
+	// tetapi bahwa validasi berada di jalur upload, bukan di loop utama.
+	mainKode, err := os.ReadFile("core_main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploadKode, err := os.ReadFile("upload.go")
+	uploadKode, err := os.ReadFile("upload_basic.go")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -41,7 +41,7 @@ func TestIsPidSatuDeteksiContainer(t *testing.T) {
 // Ini soal kejujuran: pesan "sedang di-restart" pada bot PID 1 membuat
 // pengguna menunggu /ping yang tidak akan pernah menjawab versi baru.
 func TestPesanUpdateSesuaiKemampuan(t *testing.T) {
-	isi, err := os.ReadFile("updateunduh.go")
+	isi, err := os.ReadFile("update_dl.go")
 	if err != nil {
 		t.Fatalf("baca updateunduh.go: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestPesanUpdateSesuaiKemampuan(t *testing.T) {
 	}
 
 	// Pesan progres tidak boleh menjanjikan restart pada kasus container.
-	isiUpdate, err := os.ReadFile("updateunduh.go")
+	isiUpdate, err := os.ReadFile("update_dl.go")
 	if err != nil {
 		t.Fatalf("baca updateunduh.go: %v", err)
 	}

@@ -40,7 +40,7 @@ func TestBotTanpaGitTetapBisaUpdate(t *testing.T) {
 	}
 
 	// Handler tidak boleh menolak lebih dulu.
-	sumber, err := os.ReadFile(filepath.Join(sumberDir, "update.go"))
+	sumber, err := os.ReadFile(filepath.Join(sumberDir, "update_self.go"))
 	if err != nil {
 		t.Fatalf("baca update.go: %v", err)
 	}

@@ -29,15 +29,29 @@ bukan `github.com/creack/pty` — sekitar 40 baris dan tidak perlu dirawat.
 make check-deps      # akan menolak bila ada dependency masuk
 ```
 
-### 2. Satu fitur, satu file
+### 2. Satu fitur, satu awalan
 
-| File | Tanggung jawab |
-| :--- | :--- |
-| `main.go` | Loop utama, handler Telegram, UI file manager |
-| `terminal.go` | Terminal PTY, panel, bantuan |
-| `tailscale.go` | Menu Tailscale |
-| `upload.go` | Upload file (≤20MB) |
-| `uploadbesar.go` | Upload >20MB, unduh URL, chunk |
+Semua `.go` berada di root karena Go menganggap satu folder sebagai satu
+package._bot-vps-control_ adalah satu binary, jadi memindahkannya ke subfolder
+akan menjadikannya package terpisah dan memaksa mengekspor puluhan simbol
+internal. Sebagai gantinya, tiap file diberi awalan fitur sehingga urutannya
+mengelompok dengan sendirinya di GitHub dan di listing direktori.
+
+| Awalan | Fitur | Isi |
+| :--- | :--- | :--- |
+| `core_` | Inti | Loop utama, routing perintah, panel, lock instance, konfigurasi |
+| `term_` | Terminal | PTY, shell persisten, teks `/help` dan `/commands` |
+| `deploy_` | Deploy Bot | Deteksi bahasa, unduhan, git, panel, alur deploy |
+| `upload_` | Upload | Upload ≤20MB dan upload >20MB/berbagi |
+| `update_` | Update | Pembaruan mandiri, unduhan rilis, varian kontainer |
+| `ts_` | Tailscale | Menu VPN |
+| `uji_` | Test manual | Hanya jalan bila variabel lingkungan disetel |
+
+File test memakai awalan yang sama, diakhiri `_test.go` dengan nama berkorespondensi:
+`deploy_core.go` → `deploy_core_test.go`.
+
+Tugas test manual diberi awalan `uji_` (bukan `zz_`) supaya tetap menggolong
+dengan benar, sekaligus tidak menyamar sebagai test biasa yang harus hijau.
 
 ### 3. Setiap fitur wajib punya test
 

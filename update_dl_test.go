@@ -65,7 +65,7 @@ func TestNamaBerkasCocokDenganWorkflow(t *testing.T) {
 	}
 
 	// Kode harus menyusun nama dengan pola yang sama.
-	sumber, err := os.ReadFile("updateunduh.go")
+	sumber, err := os.ReadFile("update_dl.go")
 	if err != nil {
 		t.Fatalf("baca updateunduh.go: %v", err)
 	}
@@ -499,9 +499,9 @@ func TestUjiBinaryMenolakArsitekturSalah(t *testing.T) {
 // TestJalankanUpdateTerpilihMeneruskanMetodeBuild memastikan pemilihan build
 // benar-benar sampai ke jalur build.
 func TestJalankanUpdateTerpilihMeneruskanMetodeBuild(t *testing.T) {
-	sumber, err := os.ReadFile("update.go")
+	sumber, err := os.ReadFile("update_self.go")
 	if err != nil {
-		t.Fatalf("baca update.go: %v", err)
+		t.Fatalf("baca update_self.go: %v", err)
 	}
 	isi := string(sumber)
 
@@ -524,9 +524,9 @@ func TestJalankanUpdateTerpilihMeneruskanMetodeBuild(t *testing.T) {
 // Tanpa cadangan ini, VPS yang Release-nya belum dibuat akan mentok total —
 // padahal ia mampu mengompilasi sendiri.
 func TestBeralihKeBuildSaatUnduhGagal(t *testing.T) {
-	sumber, err := os.ReadFile("update.go")
+	sumber, err := os.ReadFile("update_self.go")
 	if err != nil {
-		t.Fatalf("baca update.go: %v", err)
+		t.Fatalf("baca update_self.go: %v", err)
 	}
 	isi := string(sumber)
 

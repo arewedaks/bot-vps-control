@@ -531,7 +531,9 @@ go vet ./...
 
 Panduan singkat:
 
-- **Satu fitur = satu file.** `terminal.go`, `upload.go`, `tailscale.go`.
+- **Satu fitur = satu awalan.** `term_shell.go`, `deploy_core.go`, `ts_menu.go`.
+  Root adalah satu package Go, jadi file tidak dipisah ke subfolder; awalan
+  nama yang membuat urutannya mengelompok. Lihat `CONTRIBUTING.md`.
 - **Setiap fitur baru wajib punya test.** Repo ini memegang standar itu: 117 test
   untuk ~5.800 baris kode.
 - **Jangan tambah dependency.** Nol dependency adalah fitur utama, bukan kebetulan.

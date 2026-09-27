@@ -17,7 +17,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -62,11 +61,7 @@ func TestKegagalanKirimTidakSenyap(t *testing.T) {
 	}
 
 	// Verifikasi inti: kode SUMBER memeriksa status, bukan hanya menutup bodi.
-	sumber, err := os.ReadFile("main.go")
-	if err != nil {
-		t.Fatalf("baca main.go: %v", err)
-	}
-	teks := string(sumber)
+	teks := sumberGoJoining(t)
 
 	// Pada fungsi pengiriman pesan (sendSingleMessage), harus ada pemeriksaan
 	// StatusCode. Tanpa itu, penolakan Telegram tidak akan pernah terlihat.

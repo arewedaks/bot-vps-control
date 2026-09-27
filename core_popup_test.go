@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -106,24 +105,18 @@ func TestTidakAdaPopupLoadingTersisa(t *testing.T) {
 		`answerCallbackQuery(cb.ID, "⏳ Mengunduh file...")`,
 	}
 
-	berkas := []string{"main.go", "terminal.go", "tailscale.go"}
+	// Seluruh kode dipindai, bukan daftar file tertentu, supaya file baru
+	// ikut diperiksa tanpa perlu menambahkan nama-nya di sini.
+	teks := sumberGoJoining(t)
 	dilanggar := 0
-
-	for _, f := range berkas {
-		isi, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatalf("tidak bisa membaca %s: %v", f, err)
-		}
-		teks := string(isi)
-		for _, pola := range polaTerlarang {
-			if strings.Contains(teks, pola) {
-				t.Errorf("%s masih memuat popup loading: %s", f, pola)
-				dilanggar++
-			}
+	for _, pola := range polaTerlarang {
+		if strings.Contains(teks, pola) {
+			t.Errorf("kode masih memuat popup loading: %s", pola)
+			dilanggar++
 		}
 	}
 
 	if dilanggar == 0 {
-		t.Logf("✅ %d berkas dipindai, tidak ada popup loading tersisa", len(berkas))
+		t.Logf("✅ seluruh kode dipindai, tidak ada popup loading tersisa")
 	}
 }

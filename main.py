@@ -13,8 +13,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 bin_target = os.path.join(BASE_DIR, "core_engine")
 
 if not os.path.exists(bin_target):
-    main_go = os.path.join(BASE_DIR, "main.go")
-    if os.path.exists(main_go):
+    # Cek go.mod, bukan nama file .go tertentu. Nama file boleh berubah,
+    # go.mod tidak.
+    go_mod = os.path.join(BASE_DIR, "go.mod")
+    if os.path.exists(go_mod):
         print("⚠️ Binary core_engine belum ditemukan. Mencoba build otomatis...", flush=True)
         try:
             res = subprocess.run(
@@ -22,7 +24,7 @@ if not os.path.exists(bin_target):
                 cwd=BASE_DIR
             )
             if res.returncode != 0:
-                print("❌ Gagal melakukan kompilasi otomatis main.go", flush=True)
+                print("❌ Gagal melakukan kompilasi otomatis engine Go", flush=True)
                 sys.exit(1)
             print("✅ Berhasil mengompilasi core_engine.", flush=True)
         except Exception as e:

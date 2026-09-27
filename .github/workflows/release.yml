@@ -42,7 +42,7 @@ jobs:
         run: go test ./...
 
       # Matriks arsitektur. Tambahkan di sini bila perlu arsitektur lain;
-      # update.go akan otomatis mencari nama yang cocok.
+      # update_dl.go akan otomatis mencari nama yang cocok.
       - name: Bangun binary
         env:
           CGO_ENABLED: '0'

@@ -192,7 +192,7 @@ func TestDeteksiBahasa(t *testing.T) {
 		{"node", map[string]string{"package.json": "{}"}, bahasaNode},
 		{"node js", map[string]string{"bot.js": "console.log(1)"}, bahasaNode},
 		{"go mod", map[string]string{"go.mod": "module x"}, bahasaGo},
-		{"go file", map[string]string{"main.go": "package main"}, bahasaGo},
+		{"go file", map[string]string{"core_main.go": "package main"}, bahasaGo},
 		{"shell", map[string]string{"run.sh": "echo hi"}, bahasaShell},
 		{"kosong", map[string]string{}, ""},
 	}

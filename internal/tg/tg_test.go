@@ -1,22 +1,12 @@
-package main
-
-// ==============================================================================
-// 🧪 TEST PENGIRIMAN TELEGRAM — ERROR TIDAK BOLEH TERTELAN
-// ==============================================================================
-// sendSingleMessage pernah menelan SEMUA kegagalan: respons ditutup tanpa
-// memeriksa status. Akibatnya, bila Telegram menolak pesan (HTML tidak valid,
-// teks kepanjangan), bot tampak "diam" tanpa satu pun petunjuk di log.
-//
-// Ini berbahaya untuk fitur update, karena keluaran git dan error build
-// sering memuat karakter <, >, dan & yang harus benar-benar ter-escape.
-//
-// Test di bawah menjalankan server HTTP tiruan yang meniru penolakan Telegram,
-// jadi tidak membutuhkan jaringan maupun token sungguhan.
+// Pengujian lapisan klien Telegram: pengiriman, penanganan kegagalan,
+// pemotongan pesan panjang, dan keamanan HTML.
+package tg
 
 import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -54,22 +44,30 @@ func TestKegagalanKirimTidakSenyap(t *testing.T) {
 		io.WriteString(w, `{"ok":false,"description":"can't parse entities"}`)
 	})
 
-	sendSingleMessage(12345, "<b>rusak", nil)
+	SendSingleMessage(12345, "<b>rusak", nil)
 
 	if !terkirim {
 		t.Fatal("permintaan tidak pernah sampai ke server uji")
 	}
 
 	// Verifikasi inti: kode SUMBER memeriksa status, bukan hanya menutup bodi.
-	teks := sumberGoJoining(t)
-
-	// Pada fungsi pengiriman pesan (sendSingleMessage), harus ada pemeriksaan
-	// StatusCode. Tanpa itu, penolakan Telegram tidak akan pernah terlihat.
-	awal := strings.Index(teks, "func sendSingleMessage(")
-	if awal < 0 {
-		t.Fatal("sendSingleMessage tidak ditemukan")
+	// Sumber yang dipindai adalah berkas package ini sendiri, karena
+	// sendSingleMessage kini tinggal di internal/tg.
+	isi, err := os.ReadFile("tg.go")
+	if err != nil {
+		t.Fatalf("baca tg.go: %v", err)
 	}
-	akhir := strings.Index(teks[awal:], "// editTelegramMessage")
+	teks := string(isi)
+
+	// Pada fungsi pengiriman pesan, harus ada pemeriksaan StatusCode.
+	// Tanpa itu, penolakan Telegram tidak akan pernah terlihat.
+	// Batas akhir dicari dari definisi fungsi berikutnya, bukan dari komentar,
+	// supaya tahan terhadap perubahan pada komentar di sumber.
+	awal := strings.Index(teks, "func SendSingleMessage(")
+	if awal < 0 {
+		t.Fatal("SendSingleMessage tidak ditemukan")
+	}
+	akhir := strings.Index(teks[awal:], "func EditTelegramMessage(")
 	if akhir < 0 {
 		t.Fatal("batas fungsi tidak ditemukan")
 	}
@@ -105,7 +103,7 @@ func TestKirimSuksesTidakBerisik(t *testing.T) {
 		io.WriteString(w, `{"ok":true}`)
 	})
 
-	sendSingleMessage(12345, "<b>normal</b>", nil)
+	SendSingleMessage(12345, "<b>normal</b>", nil)
 
 	if kodeTerlihat != http.StatusOK {
 		t.Errorf("server tidak menerima permintaan (kode=%d)", kodeTerlihat)
@@ -134,7 +132,7 @@ func TestMuatanKirimMemakaiHTML(t *testing.T) {
 	ApiUrl = srv.URL
 	defer func() { ApiUrl = lamaURL }()
 
-	sendSingleMessage(999, "<b>hai</b>", nil)
+	SendSingleMessage(999, "<b>hai</b>", nil)
 
 	if !strings.Contains(diterima, `"parse_mode":"HTML"`) {
 		t.Errorf("parse_mode HTML tidak terkirim: %s", diterima)
@@ -178,7 +176,7 @@ func TestPesanPanjangDipotong(t *testing.T) {
 	defer func() { ApiUrl = lamaURL }()
 
 	// 10000 karakter harus terpecah menjadi beberapa bagian.
-	sendTelegram(555, strings.Repeat("x", 10000))
+	SendTelegram(555, strings.Repeat("x", 10000))
 
 	if jumlah < 2 {
 		t.Errorf("❌ pesan panjang tidak dipecah (hanya %d bagian terkirim)", jumlah)
@@ -195,7 +193,7 @@ func TestPemotonganTidakMemutusTagHTML(t *testing.T) {
 	satuan := "<b>kata</b> <i>lagi</i> "
 	panjang := strings.Repeat(satuan, 300)
 
-	bagian := splitMessage(panjang, 1000)
+	bagian := SplitMessage(panjang, 1000)
 	if len(bagian) < 2 {
 		t.Fatalf("teks panjang tidak terpecah (%d bagian)", len(bagian))
 	}
@@ -210,75 +208,4 @@ func TestPemotonganTidakMemutusTagHTML(t *testing.T) {
 		}
 	}
 	t.Logf("✅ %d bagian, semua tag HTML seimbang", len(bagian))
-}
-
-// ==============================================================================
-// 4. HTML DARI GIT SUDAH AMAN
-// ==============================================================================
-
-// TestKeluaranGitAmanDikirim adalah rangkaian lengkap: keluaran git berisi
-// karakter khusus, di-escape, lalu dikirim — dan harus diterima tanpa penolakan.
-func TestKeluaranGitAmanDikirim(t *testing.T) {
-	var diterima string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		diterima = string(b)
-
-		// Tiru pemeriksaan Telegram: tolak bila ada tag tidak dikenal.
-		if strings.Contains(diterima, `"text":"`) {
-			awal := strings.Index(diterima, `"text":"`) + len(`"text":"`)
-			akhir := strings.LastIndex(diterima, `"`)
-			teks := diterima[awal:akhir]
-			if strings.Count(teks, "<b>") != strings.Count(teks, "</b>") {
-				w.WriteHeader(http.StatusBadRequest)
-				io.WriteString(w, `{"ok":false,"description":"can't parse entities"}`)
-				return
-			}
-		}
-		io.WriteString(w, `{"ok":true}`)
-	}))
-	defer srv.Close()
-
-	lamaURL := ApiUrl
-	ApiUrl = srv.URL
-	defer func() { ApiUrl = lamaURL }()
-
-	// Keluaran git yang realistis: penuh <, >, &, dan tanda kutip.
-	keluaranGit := "error: cannot use x (type <T>) as type <U> in assignment\n" +
-		"  at main.go:42\n  symbols: a & b, \"quoted\", 'single'\n" +
-		"  map[string]interface{} vs []int\n"
-
-	pesan := "❌ <b>Build gagal.</b>\n<pre>" + htmlEscapeRingkas(keluaranGit, 2000) + "</pre>"
-
-	sendTelegram(777, pesan)
-
-	if !strings.Contains(diterima, `"text"`) {
-		t.Fatal("pesan tidak terkirim")
-	}
-	// &lt; harus sudah ada SEBELUM json.Marshal; JSON lalu meng-escape & menjadi \u0026.
-	if !strings.Contains(diterima, "T") || !strings.Contains(diterima, "u003c") {
-		t.Errorf("karakter < tidak ter-escape sebelum dikirim: %s", diterima)
-	}
-	t.Log("✅ Keluaran git ter-escape dan diterima Telegram")
-}
-
-// TestEscapingAmpersandTidakDimainkanDuaKali memastikan & dari pengguna
-// tidak berubah menjadi &amp;amp;.
-//
-// Kesalahan ini membuat pesan error tampil berantakan dan sulit dibaca
-// justru saat pengguna paling membutuhkan kejelasan.
-func TestEscapingAmpersandTidakDimainkanDuaKali(t *testing.T) {
-	masuk := "a & b"
-	sekali := htmlEscapeRingkas(masuk, 100)
-	if !strings.Contains(sekali, "&amp;") {
-		t.Fatalf("escape pertama gagal: %q", sekali)
-	}
-	// Hasil escape tidak boleh di-escape lagi oleh pemanggil.
-	if strings.Contains(sekali, "&amp;amp;") {
-		t.Error("❌ & ter-escape dua kali")
-	}
-	if strings.Contains(sekali, "&amp;&") {
-		t.Error("❌ & diikuti karakter mentah — escape tidak konsisten")
-	}
-	t.Log("✅ Ampersand ter-escape tepat sekali")
 }

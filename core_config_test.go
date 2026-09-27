@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bot-vps-control/internal/tg"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -131,46 +133,53 @@ var awalanFitur = []string{
 // TestNamaFileMengikutiKonvensi memastikan setiap file .go memakai awalan fitur
 // yang dikenal, dan file test berpasangan dengan file kodenya.
 func TestNamaFileMengikutiKonvensi(t *testing.T) {
-	entri, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("tidak bisa membaca direktori: %v", err)
-	}
-
 	var jumlahKode int
-	for _, e := range entri {
-		nama := e.Name()
-		if e.IsDir() || !strings.HasSuffix(nama, ".go") {
-			continue
-		}
 
-		// Setiap file harus diawali salah satu awalan yang dikenal.
-		ok := false
-		for _, a := range awalanFitur {
-			if strings.HasPrefix(nama, a) {
-				ok = true
-				break
+	// FailTelusuri seluruh package: root dan setiap subfolder internal/.
+	err := filepath.Walk(".", func(p string, e os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if e.IsDir() {
+			if p != "." && (strings.HasPrefix(e.Name(), ".") || e.Name() == "vendor") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		nama := e.Name()
+		if !strings.HasSuffix(nama, ".go") {
+			return nil
+		}
+		rel := strings.TrimPrefix(p, "./")
+		diRoot := !strings.Contains(rel, "/")
+		// Hanya file root yang wajib berawalan fitur. File di dalam package
+		// bernama sudah terkelompok lewat nama foldernya.
+		if diRoot {
+			ok := false
+			for _, a := range awalanFitur {
+				if strings.HasPrefix(nama, a) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				t.Errorf("%q di root tidak memakai awalan fitur: %v", rel, awalanFitur)
 			}
 		}
-		if !ok {
-			t.Errorf("%q tidak memakai awalan fitur yang dikenal: %v", nama, awalanFitur)
-			continue
-		}
-
-		// File kode berakhiran .go, file test _test.go.
-		//
-		// Tidak menuntut file test punya pasangan kode 1:1: beberapa test file
-		// sengaja menguji lebih dari satu file, misalnya term_help_test.go
-		// menguji teks bantuan yang didefinisikan di term_shell.go.
 		if !strings.HasSuffix(nama, "_test.go") {
 			jumlahKode++
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("gagal menelusuri: %v", err)
 	}
 
-	// Penjaga: kalau的不是 ini, test tidak akan pernah gagal sama sekali.
+	// Fail Penjaga: kalau bukan ini, test tidak akan pernah gagal sama sekali.
 	if jumlahKode < 8 {
 		t.Errorf("hanya %d file kode ditemukan — test ini mungkin tidak memindai apa pun", jumlahKode)
 	}
-	t.Logf("✅ %d file kode, semua mengikuti awalan fitur", jumlahKode)
+	t.Logf("✅ %d file kode, root mengikuti awalan fitur", jumlahKode)
 }
 
 // sumberGoJoining menggabungkan seluruh file .go non-test menjadi satu string.
@@ -201,4 +210,41 @@ func sumberGoJoining(t *testing.T) string {
 		t.Fatal("tidak ada file .go yang terbaca")
 	}
 	return sb.String()
+}
+
+// TestBridgeTgMenerimaKonfigurasi memastikan nilai Telegram benar-benar
+// sampai ke package internal/tg.
+//
+// Lapisan klien sudah pindah ke sana, tapi root masih memegang salinannya.
+// Kalau loadConfig lupa menyalin, bot tetap jalan di RootTesting: semua
+// pemanggilan lewat bridge menjadi sia-sia karena endpoint-nya kosong.
+// Gejalanya diam dan sulit dilacak, jadi diikat test.
+func TestBridgeTgMenerimaKonfigurasi(t *testing.T) {
+	// Simpan & pulihkan seluruh state global yang disentuh.
+	lamaURL, lamaToken := ApiUrl, BotToken
+	lamaTgURL, lamaTgToken := tg.ApiUrl, tg.BotToken
+	defer func() {
+		ApiUrl, BotToken = lamaURL, lamaToken
+		tg.ApiUrl, tg.BotToken = lamaTgURL, lamaTgToken
+	}()
+
+	// Env di-set eksplisit supaya hasil tidak ikut terbaca dari mesin test.
+	t.Setenv("BOT_TOKEN", "123456:UjiBridge_token_dummy")
+	loadConfig()
+
+	if BotToken == "" {
+		t.Fatal("loadConfig tidak mengisi BotToken dari BOT_TOKEN")
+	}
+	if tg.BotToken != BotToken {
+		t.Errorf("tg.BotToken = %q, harusnya sama dengan root BotToken = %q",
+			tg.BotToken, BotToken)
+	}
+	if tg.ApiUrl != ApiUrl {
+		t.Errorf("tg.ApiUrl = %q, harusnya sama dengan root ApiUrl = %q",
+			tg.ApiUrl, ApiUrl)
+	}
+	if tg.ApiUrl == "" {
+		t.Fatal("tg.ApiUrl kosong — seluruh pengiriman akan gagal diam-diam")
+	}
+	t.Logf("✅ bridge tersambung: %s", strings.TrimSuffix(strings.TrimSuffix(tg.ApiUrl, tg.BotToken), "/"))
 }

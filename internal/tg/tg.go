@@ -455,7 +455,12 @@ func DownloadTelegramFile(fileID string, destPath string) (int64, error) {
 		return 0, fmt.Errorf("gagal mendapatkan file path dari Telegram: %s", getFileResp.Description)
 	}
 
-	downloadURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", BotToken, getFileResp.Result.FilePath)
+	// Host unduhan harus mengikuti ApiUrl yang sama seperti getFile di atas.
+	// Hardcode api.telegram.org membuat semua unggahan dan deploy gagal 404
+	// saat bot dijalankan memakai Bot API lokal/kustom.
+	akhiran := "/bot" + BotToken
+	downloadURL := strings.TrimSuffix(ApiUrl, akhiran) +
+		"/file" + akhiran + "/" + getFileResp.Result.FilePath
 
 	dlClient := &http.Client{Timeout: 120 * time.Second}
 	dlResp, err := dlClient.Get(downloadURL)

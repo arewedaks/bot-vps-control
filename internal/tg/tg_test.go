@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -208,4 +209,68 @@ func TestPemotonganTidakMemutusTagHTML(t *testing.T) {
 		}
 	}
 	t.Logf("✅ %d bagian, semua tag HTML seimbang", len(bagian))
+}
+
+// ==============================================================================
+// 5. UNDUHAN FILE HARUS MENGIKUTI API YANG DIPAKAI
+// ==============================================================================
+
+// TestUnduhanFileIkutiApiUrlTJaga unduhan lewat Bot API kustom.
+//
+// /downloadTelegramFile dulunya menempelkan host api.telegram.org secara
+// literals padahal getFile satu baris di atasnya memakai ApiUrl. consequence:
+// setiap unggahan dan deploy gagal 404 begitu bot diarahkan ke Bot API
+// lokal — persis skenario yang didukung variabel API_URL.
+func TestUnduhanFileIkutiApiUrlTJaga(t *testing.T) {
+	var (
+		dipanggilUnduh bool
+		pathUnduh      string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/getFile"):
+			io.WriteString(w, `{"ok":true,"result":{"file_path":"documents/uji.txt","file_size":5}}`)
+		case strings.Contains(r.URL.Path, "/file/"):
+			dipanggilUnduh = true
+			pathUnduh = r.URL.Path
+			io.WriteString(w, "HELLO")
+		default:
+			t.Errorf("permintaan tak terduga: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	lamaURL, lamaToken := ApiUrl, BotToken
+	defer func() { ApiUrl, BotToken = lamaURL, lamaToken }()
+
+	// Bentuk ApiUrl seperti yang disusun loadConfig: <host>/bot<token>.
+	BotToken = "123:ABC"
+	ApiUrl = srv.URL + "/bot123:ABC"
+
+	dst := filepath.Join(t.TempDir(), "uji.txt")
+	n, err := DownloadTelegramFile("fid-1", dst)
+	if err != nil {
+		t.Fatalf("unduhan gagal: %v", err)
+	}
+	if n != 5 {
+		t.Errorf("ukuran = %d, ingin 5", n)
+	}
+	if !dipanggilUnduh {
+		t.Fatal("tak ada permintaan ke /file/ — host unduhan tidak mengikuti ApiUrl")
+	}
+	if strings.Contains(pathUnduh, "api.telegram.org") {
+		t.Errorf("unduhan bocor ke host publik: %s", pathUnduh)
+	}
+	if !strings.Contains(pathUnduh, "/file/bot123:ABC/documents/uji.txt") {
+		t.Errorf("path unduhan salah: %s", pathUnduh)
+	}
+
+	isi, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("berkas tujuan tidak terbaca: %v", err)
+	}
+	if string(isi) != "HELLO" {
+		t.Errorf("isi = %q, ingin %q", isi, "HELLO")
+	}
 }

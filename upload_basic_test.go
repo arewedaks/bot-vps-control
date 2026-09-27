@@ -411,3 +411,53 @@ func TestBeberapaFileBerturutTurut(t *testing.T) {
 	}
 	t.Log("✅ Mode upload bertahan untuk beberapa file berturut-turut")
 }
+
+// TestCaptionDiLuarAreaKerjaDitolak mencegah caption membuat folder di
+// luar area kerja bot.
+//
+// Caption "/deploy/proyek" sebelumnya lolos ke filepath.Abs lalu
+// MkdirAll("/deploy") — gagal dengan "permission denied" saat bot berjalan
+// sebagai pengguna biasa, dan yang lebih buruk: DIBUAT diam-diam di akar
+// sistem saat bot berjalan sebagai root (bot-vps.service memakai User=root).
+func TestCaptionDiLuarAreaKerjaDitolak(t *testing.T) {
+	u := int64(880099)
+
+	for _, caption := range []string{
+		"/deploy/proyek",
+		"/tmp/folder-belum-ada-880099/berkas.txt",
+	} {
+		_, _, err := resolveUploadDest(u, caption, "asli.txt")
+		if err == nil {
+			t.Errorf("caption %q seharusnya ditolak, bukan diterima", caption)
+			continue
+		}
+		if !strings.Contains(err.Error(), "belum ada") {
+			t.Errorf("caption %q: pesan kurang jelas: %v", caption, err)
+		}
+	}
+}
+
+// TestCaptionAreaKerjaTetapBerjalan memastikan perbaikan di atas tidak
+// memutus caption relatif dan folder yang memang sudah ada.
+func TestCaptionAreaKerjaTetapBerjalan(t *testing.T) {
+	u := int64(880098)
+
+	// Caption relatif di area kerja tetap boleh, folder dibuat otomatis.
+	dest, _, err := resolveUploadDest(u, "subfolder-baru/berkas.txt", "asli.txt")
+	if err != nil {
+		t.Fatalf("caption relatif ditolak: %v", err)
+	}
+	if filepath.Base(dest) != "berkas.txt" {
+		t.Errorf("dest = %q, ingin berkas.txt", dest)
+	}
+
+	// Folder yang sudah ada di luar area kerja tetap boleh (fitur lama).
+	dir := t.TempDir()
+	dest2, _, err := resolveUploadDest(u, filepath.Join(dir, "kustom.txt"), "asli.txt")
+	if err != nil {
+		t.Fatalf("folder yang sudah ada ditolak: %v", err)
+	}
+	if filepath.Base(dest2) != "kustom.txt" {
+		t.Errorf("dest2 = %q, ingin kustom.txt", dest2)
+	}
+}

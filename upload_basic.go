@@ -267,7 +267,32 @@ func resolveUploadDest(userID int64, caption string, fileName string) (string, b
 	if err != nil {
 		return "", false, fmt.Errorf("path tujuan tidak valid: %w", err)
 	}
+	// Folder tujuan yang belum ada di luar area kerja tidak boleh dibuat
+	// diam-diam: caption "/deploy/proyek" akan memicu MkdirAll("/deploy").
+	// Sebagai pengguna biasa itu gagal dengan "permission denied" yang
+	// membingungkan; sebagai root (User=root di bot-vps.service) folder
+	// asal jadi dibuat di akar sistem. Di dalam area kerja, pembuatan
+	// otomatis tetap seperti sebelumnya.
+	if _, err := os.Stat(filepath.Dir(dest)); err != nil && !diAreaKerja(dest) {
+		return "", false, fmt.Errorf(
+			"folder tujuan %q belum ada — buat dulu lewat file manager, "+
+				"atau kirim caption relatif seperti \"subfolder/berkas.txt\"",
+			filepath.Dir(dest))
+	}
 	return dest, needsOverwriteConfirm(dest, userID), nil
+}
+
+// diAreaKerja melaporkan apakah dest berada di dalam folder kerja bot.
+func diAreaKerja(dest string) bool {
+	akar, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(akar, dest)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // needsOverwriteConfirm melaporkan apakah file sudah ada dan belum disetujui ditimpa.

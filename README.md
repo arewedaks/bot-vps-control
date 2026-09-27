@@ -104,14 +104,6 @@ sudo systemctl enable --now bot-vps
 sudo systemctl status bot-vps
 ```
 
-### Menjalankan lewat Python (opsional)
-
-`main.py` adalah launcher tipis yang otomatis build binary bila belum ada:
-
-```bash
-python3 main.py
-```
-
 ---
 
 ## 🦎 Menu Tailscale

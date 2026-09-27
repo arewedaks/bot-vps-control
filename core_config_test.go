@@ -2,6 +2,8 @@ package main
 
 import (
 	"bot-vps-control/internal/tg"
+	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,21 +43,53 @@ func TestRepoBersihDariKredensial(t *testing.T) {
 	// repo publik akan memuat token yang justru ingin dicegah beredar.
 	tokenBot := regexp.MustCompile(`\b[0-9]{8,12}:[A-Za-z0-9_-]{30,40}\b`)
 
-	berkas := []string{
-		"core_main.go", "term_shell.go", "ts_menu.go", "upload_basic.go", "upload_chunk.go",
-		"main.py", "Makefile", "bot-vps.service", ".env.example", "README.md",
-	}
+	// Fixture sintetis yang sengaja berbentuk token, untuk menguji bahwa sidik
+	// jari tidak membocorkan token aslinya. Panjangnya identik dengan token
+	// asli, jadi regex tidak bisa membedakannya — karena itu diizinkan secara
+	// eksplisit, bukan dengan melemahkan pola.
+	boleh := []string{"8123456789:AAFakeTokenUntukPengujianSaja_xyz123"}
 
-	for _, f := range berkas {
-		isi, err := os.ReadFile(f)
+	// Daftar file迪slash di-hardcode cepat basi: begitu refactor memindahkan
+	// kode ke internal/, seluruh package itu lepas dari pemeriksaan. Sekarang
+	// repo dipindai apa adanya, jadi file baru ikut tercover otomatis.
+	var diperiksa int
+	err := filepath.WalkDir(".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			continue // berkas opsional
+			return nil // berkas tak terbaca: lewati, jangan gagalkan test
+		}
+		if d.IsDir() {
+			if d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Hanya teks; lewati binary dan arsip.
+		switch strings.ToLower(filepath.Ext(p)) {
+		case ".go", ".md", ".sh", ".yml", ".yaml", ".service", ".example", ".py", "":
+		default:
+			return nil
+		}
+		isi, err := os.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		diperiksa++
+		// Hilangkan fixture sintetis yang diizinkan sebelum sisa pola dicari.
+		for _, f := range boleh {
+			isi = bytes.ReplaceAll(isi, []byte(f), []byte(""))
 		}
 		if tokenBot.Match(isi) {
-			t.Errorf("%s memuat sesuatu yang berbentuk token bot Telegram — JANGAN publish!", f)
+			t.Errorf("%s memuat sesuatu yang berbentuk token bot Telegram — JANGAN publish!", p)
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("gagal memindai repo: %v", err)
 	}
-	t.Logf("✅ %d berkas bersih dari pola token bot", len(berkas))
+	if diperiksa < 20 {
+		t.Errorf("hanya %d berkas dipindai — pola petakan repo kemungkinan rusak", diperiksa)
+	}
+	t.Logf("✅ %d berkas bersih dari pola token bot", diperiksa)
 }
 
 // TestGitignoreMelindungiRahasia memastikan .env dan binary tidak akan ter-commit.

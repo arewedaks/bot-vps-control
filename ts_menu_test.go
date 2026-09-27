@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot-vps-control/internal/term"
 	"strings"
 	"testing"
 )
@@ -265,7 +266,7 @@ func TestSetiapTombolHelpPunyaHandler(t *testing.T) {
 		"hp:b": true, // kembali ke bantuan
 	}
 
-	kb := helpKeyboard()
+	kb := term.HelpKeyboard()
 	hitung := 0
 	for _, row := range kb.InlineKeyboard {
 		for _, b := range row {

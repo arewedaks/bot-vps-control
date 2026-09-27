@@ -1,4 +1,4 @@
-package main
+package term
 
 // ==============================================================================
 // 🧪 SMOKE TEST PTY — VERIFIKASI LEVEL 3 DI VPS
@@ -64,7 +64,7 @@ func TestPTYInteractiveSession(t *testing.T) {
 	defer KillSession(uid)
 
 	// 1. Buat sesi lewat kode produksi (bukan tiruan).
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Fatalf("getOrCreateSession gagal: %v", err)
 	}
 	t.Logf("✅ Sesi dibuat: %s", SessionInfo(uid))
@@ -166,7 +166,7 @@ func TestPTYNoOrphanAfterKill(t *testing.T) {
 	}
 
 	const uid int64 = 770002
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Fatalf("buat sesi gagal: %v", err)
 	}
 
@@ -336,14 +336,14 @@ func TestPTYSessionLimit(t *testing.T) {
 
 	for i := 0; i < termMaxSessions; i++ {
 		uid := int64(771000 + i)
-		if _, err := getOrCreateSession(uid); err != nil {
+		if _, err := GetOrCreateSession(uid); err != nil {
 			t.Fatalf("sesi ke-%d gagal: %v", i, err)
 		}
 		created = append(created, uid)
 	}
 
 	// Sesi ke-(max+1) harus DITOLAK, bukan crash atau OOM.
-	if _, err := getOrCreateSession(771999); err == nil {
+	if _, err := GetOrCreateSession(771999); err == nil {
 		t.Error("❌ sesi melebihi batas seharusnya ditolak")
 	} else {
 		t.Logf("✅ Batas sesi (%d) ditegakkan: %v", termMaxSessions, err)

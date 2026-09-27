@@ -1,4 +1,4 @@
-package main
+package term
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 
 // TestHelpTextRingkas memastikan /help tidak lagi memuat perintah yang dibuang.
 func TestHelpTextRingkas(t *testing.T) {
-	h := helpText()
+	h := HelpText()
 
 	// Harus memuat fitur utama.
 	harusAda := []string{
@@ -16,7 +16,7 @@ func TestHelpTextRingkas(t *testing.T) {
 	}
 	for _, c := range harusAda {
 		if !strings.Contains(h, c) {
-			t.Errorf("helpText() harus memuat %q", c)
+			t.Errorf("HelpText() harus memuat %q", c)
 		}
 	}
 
@@ -25,23 +25,23 @@ func TestHelpTextRingkas(t *testing.T) {
 	dibuang := []string{"/upload", "/getfile", "/mkdir", "/cat", "/ls", "/ps", "/ports", "/view", "/download", "/cmd"}
 	for _, c := range dibuang {
 		if strings.Contains(h, "<code>"+c) {
-			t.Errorf("helpText() tidak boleh memuat %q di bantuan utama", c)
+			t.Errorf("HelpText() tidak boleh memuat %q di bantuan utama", c)
 		}
 	}
 
 	// Panjang wajar — ini halaman bantuan, bukan dokumentasi.
 	if len(h) > 1800 {
-		t.Errorf("helpText() terlalu panjang: %d karakter (maks 1800)", len(h))
+		t.Errorf("HelpText() terlalu panjang: %d karakter (maks 1800)", len(h))
 	}
-	t.Logf("✅ helpText() %d karakter, %d baris", len(h), strings.Count(h, "\n")+1)
+	t.Logf("✅ HelpText() %d karakter, %d baris", len(h), strings.Count(h, "\n")+1)
 }
 
 // TestHelpTextBisaDiparseHTML memastikan semua tag HTML seimbang.
 func TestHelpTextBisaDiparseHTML(t *testing.T) {
 	for nama, teks := range map[string]string{
-		"helpText":          helpText(),
-		"commandsPlainText": commandsPlainText(),
-		"terminalHelpText":  terminalHelpText(),
+		"helpText":          HelpText(),
+		"commandsPlainText": CommandsPlainText(),
+		"terminalHelpText":  TerminalHelpText(),
 	} {
 		for _, tag := range []string{"b", "i", "code", "pre"} {
 			open := strings.Count(teks, "<"+tag+">")
@@ -55,7 +55,7 @@ func TestHelpTextBisaDiparseHTML(t *testing.T) {
 
 // TestCommandsPlainTextLengkap memastikan daftar lengkap tetap punya semuanya.
 func TestCommandsPlainTextLengkap(t *testing.T) {
-	c := commandsPlainText()
+	c := CommandsPlainText()
 	semua := []string{
 		"/term", "/term apt check", "/term apt update", "/term apt upgrade",
 		"/term apt safe", "/term apt full", "/term apt list", "/term apt clean",
@@ -66,12 +66,12 @@ func TestCommandsPlainTextLengkap(t *testing.T) {
 	}
 	for _, s := range semua {
 		if !strings.Contains(c, s) {
-			t.Errorf("commandsPlainText() harus memuat %q", s)
+			t.Errorf("CommandsPlainText() harus memuat %q", s)
 		}
 	}
 	// Upload dijelaskan sebagai instruksi, bukan perintah.
 	if !strings.Contains(c, "caption") {
-		t.Error("commandsPlainText() harus menjelaskan cara upload via caption")
+		t.Error("CommandsPlainText() harus menjelaskan cara upload via caption")
 	}
 }
 
@@ -81,15 +81,15 @@ func TestCommandsPlainTextLengkap(t *testing.T) {
 // tahu fitur itu ada secara kebetulan. Menambahkan perintah baru ke switch di
 // main.go harus diikuti pembaruan bantuan agar uji ini tetap lulus.
 func TestHelpMenyebutSemuaPerintahUtama(t *testing.T) {
-	h := helpText()
-	c := commandsPlainText()
+	h := HelpText()
+	c := CommandsPlainText()
 
 	// Perintah yang wajib muncul di helpText (gambaran singkat).
 	for _, perintah := range []string{
 		"/term", "/fm", "/stats", "/unduh", "/deploy", "/ts",
 	} {
 		if !strings.Contains(h, perintah) {
-			t.Errorf("helpText() tidak menyebut %q", perintah)
+			t.Errorf("HelpText() tidak menyebut %q", perintah)
 		}
 	}
 
@@ -98,14 +98,14 @@ func TestHelpMenyebutSemuaPerintahUtama(t *testing.T) {
 		"/deploy", "/term", "/fm", "/ts", "/unduh", "/chunk",
 	} {
 		if !strings.Contains(c, perintah) {
-			t.Errorf("commandsPlainText() tidak menyebut %q", perintah)
+			t.Errorf("CommandsPlainText() tidak menyebut %q", perintah)
 		}
 	}
 
 	// Setiap tombol bantuan harus punya padanan penjelasan di helpText.
 	// Dipetakan manual karena label tombol memakai bahasa manusia, bukan
 	// perintah, sehingga tidak bisa dicocokkan secara otomatis.
-	kb := helpKeyboard()
+	kb := HelpKeyboard()
 	for _, baris := range kb.InlineKeyboard {
 		for _, b := range baris {
 			if b.CallbackData == "hp:a" || b.CallbackData == "hp:b" {
@@ -113,7 +113,7 @@ func TestHelpMenyebutSemuaPerintahUtama(t *testing.T) {
 			}
 			teksTombol := strings.TrimSpace(strings.TrimLeft(b.Text, "🖥️📁📊⚙️🦎📦🚀 "))
 			if teksTombol != "" && !strings.Contains(strings.ToLower(h), strings.ToLower(teksTombol)) {
-				t.Logf("⚠️ tombol %q belum dijelaskan di helpText()", b.Text)
+				t.Logf("⚠️ tombol %q belum dijelaskan di HelpText()", b.Text)
 			}
 		}
 	}
@@ -121,9 +121,9 @@ func TestHelpMenyebutSemuaPerintahUtama(t *testing.T) {
 
 // TestHelpKeyboardValid memastikan tombol bantuan punya callback_data yang sah.
 func TestHelpKeyboardValid(t *testing.T) {
-	kb := helpKeyboard()
+	kb := HelpKeyboard()
 	if kb == nil || len(kb.InlineKeyboard) == 0 {
-		t.Fatal("helpKeyboard() kosong")
+		t.Fatal("HelpKeyboard() kosong")
 	}
 	n := 0
 	for _, baris := range kb.InlineKeyboard {
@@ -141,37 +141,17 @@ func TestHelpKeyboardValid(t *testing.T) {
 			}
 		}
 	}
-	t.Logf("✅ helpKeyboard() %d tombol, semua callback_data valid", n)
+	t.Logf("✅ HelpKeyboard() %d tombol, semua callback_data valid", n)
 }
 
 // TestBackKeyboardValid memastikan tombol kembali menunjuk ke handler yang ada.
 func TestBackKeyboardValid(t *testing.T) {
-	kb := backToHelpKeyboard()
+	kb := BackToHelpKeyboard()
 	if kb == nil || len(kb.InlineKeyboard) == 0 {
-		t.Fatal("backToHelpKeyboard() kosong")
+		t.Fatal("BackToHelpKeyboard() kosong")
 	}
 	got := kb.InlineKeyboard[0][0].CallbackData
 	if got != "hp:b" {
 		t.Errorf("tombol kembali harus hp:b, dapat %q", got)
-	}
-}
-
-// TestBuildersTidakPanic memastikan pembangun pesan tidak crash.
-func TestBuildersTidakPanic(t *testing.T) {
-	for nama, fn := range map[string]func() string{
-		"buildStatsMessage":   buildStatsMessage,
-		"buildSysInfoMessage": buildSysInfoMessage,
-	} {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Errorf("%s panic: %v", nama, r)
-				}
-			}()
-			out := fn()
-			if out == "" {
-				t.Errorf("%s menghasilkan string kosong", nama)
-			}
-		}()
 	}
 }

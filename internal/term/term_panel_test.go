@@ -1,6 +1,7 @@
-package main
+package term
 
 import (
+	"bot-vps-control/internal/tg"
 	"testing"
 	"time"
 )
@@ -16,9 +17,9 @@ import (
 func TestBanyakPerintahSatuPanel(t *testing.T) {
 	uid := int64(660001)
 	defer KillSession(uid)
-	defer clearPanel(uid)
+	defer tg.ClearPanel(uid)
 
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Skipf("PTY tidak tersedia: %v", err)
 	}
 
@@ -57,19 +58,19 @@ func TestBanyakPerintahSatuPanel(t *testing.T) {
 // menulis ke pesan yang sama, bukan membuat pesan baru.
 func TestPanelDipakaiUlang(t *testing.T) {
 	uid := int64(660002)
-	defer clearPanel(uid)
+	defer tg.ClearPanel(uid)
 
 	// Percobaan pertama: belum ada panel.
-	if _, _, ok := getPanelMessage(uid); ok {
+	if _, _, ok := tg.GetPanelMessage(uid); ok {
 		t.Fatal("panel awal seharusnya belum ada")
 	}
 
 	// Bot membuka /term pertama kali → pesan baru dicatat sebagai panel.
-	setPanelMessage(uid, 111, 5001)
+	tg.SetPanelMessage(uid, 111, 5001)
 
 	// Perintah-perintah berikutnya HARUS memakai pesan yang sama.
 	for i := 0; i < 5; i++ {
-		id, chat, ok := getPanelMessage(uid)
+		id, chat, ok := tg.GetPanelMessage(uid)
 		if !ok {
 			t.Fatalf("iterasi %d: panel hilang", i)
 		}
@@ -84,14 +85,14 @@ func TestPanelDipakaiUlang(t *testing.T) {
 // TestPanelTidakBocorAntarAdmin memastikan panel satu admin tidak mengganggu admin lain.
 func TestPanelTidakBocorAntarAdmin(t *testing.T) {
 	a, b := int64(660003), int64(660004)
-	setPanelMessage(a, 1, 77)
-	setPanelMessage(b, 1, 88)
-	defer func() { clearPanel(a); clearPanel(b) }()
+	tg.SetPanelMessage(a, 1, 77)
+	tg.SetPanelMessage(b, 1, 88)
+	defer func() { tg.ClearPanel(a); tg.ClearPanel(b) }()
 
-	if id, _, _ := getPanelMessage(a); id != 77 {
+	if id, _, _ := tg.GetPanelMessage(a); id != 77 {
 		t.Errorf("admin A panel = %d, mau 77", id)
 	}
-	if id, _, _ := getPanelMessage(b); id != 88 {
+	if id, _, _ := tg.GetPanelMessage(b); id != 88 {
 		t.Errorf("admin B panel = %d, mau 88", id)
 	}
 	t.Log("✅ Panel terisolasi per admin")
@@ -101,9 +102,9 @@ func TestPanelTidakBocorAntarAdmin(t *testing.T) {
 // panel yang menunjuk ke pesan lama.
 func TestKillSessionMembersihkanPanel(t *testing.T) {
 	uid := int64(660005)
-	setPanelMessage(uid, 999, 312)
-	clearPanel(uid)
-	if _, _, ok := getPanelMessage(uid); ok {
+	tg.SetPanelMessage(uid, 999, 312)
+	tg.ClearPanel(uid)
+	if _, _, ok := tg.GetPanelMessage(uid); ok {
 		t.Fatal("panel seharusnya dibersihkan")
 	}
 	t.Log("✅ Panel dibersihkan saat sesi ditutup")

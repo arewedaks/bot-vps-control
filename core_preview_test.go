@@ -89,7 +89,7 @@ func TestTruncateMidMempertahankanEkstensi(t *testing.T) {
 
 	for _, c := range kasus {
 		hasil := truncateMid(c.masuk, c.maks)
-		if !contains(hasil, c.harusAda) {
+		if !strings.Contains(hasil, c.harusAda) {
 			t.Errorf("truncateMid(%q, %d) = %q — kehilangan %q",
 				c.masuk, c.maks, hasil, c.harusAda)
 		}

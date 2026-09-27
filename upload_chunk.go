@@ -25,6 +25,7 @@ package main
 // ketiga metode bisa dikirim keluar lewat /getfile (batas 50MB per pesan).
 
 import (
+	"bot-vps-control/internal/term"
 	"fmt"
 	"html"
 	"io"
@@ -652,13 +653,13 @@ func handleUploadBesarCallback(userID int64, chatID int64, action string) (strin
 		// Format: chunkmulai:<dirID>:<total>
 		bagian := strings.Split(strings.TrimPrefix(action, "chunkmulai:"), ":")
 		if len(bagian) < 2 {
-			return "❌ Data tidak lengkap.", backToTerminalKeyboard()
+			return "❌ Data tidak lengkap.", term.BackToTerminalKeyboard()
 		}
 		dir := getPathByID(bagian[0])
 		total := 0
 		fmt.Sscanf(bagian[1], "%d", &total)
 		if dir == "" || total < 2 {
-			return "❌ Folder atau jumlah bagian tidak valid.", backToTerminalKeyboard()
+			return "❌ Folder atau jumlah bagian tidak valid.", term.BackToTerminalKeyboard()
 		}
 		return fmt.Sprintf(
 			"🧩 <b>Siap menerima %d bagian</b>\n"+
@@ -667,7 +668,7 @@ func handleUploadBesarCallback(userID int64, chatID int64, action string) (strin
 				"Kirim bagian-bagiannya sebagai <b>dokumen</b>, berurutan. "+
 				"Setelah semua terkirim, bot menyatukannya otomatis.\n\n"+
 				"<i>Batalkan dengan /chunk batal</i>",
-			total, html.EscapeString(dir)), backToTerminalKeyboard()
+			total, html.EscapeString(dir)), term.BackToTerminalKeyboard()
 
 	default:
 		return renderBantuanUploadBesar("")

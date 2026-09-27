@@ -1,4 +1,4 @@
-package main
+package term
 
 import (
 	"strings"
@@ -166,7 +166,7 @@ func TestDirectModeToggle(t *testing.T) {
 
 func TestReapIdleSessionsEmpty(t *testing.T) {
 	// Tidak boleh panic saat map kosong.
-	reapIdleSessions()
+	ReapIdleSessions()
 }
 
 // ---- Test buffer cap (simulasi pertumbuhan Screen) ----

@@ -1,4 +1,4 @@
-package main
+package term
 
 // ==============================================================================
 // 🖥️ INTERACTIVE PTY TERMINAL — LEVEL 3 (Zero External Dependency)
@@ -20,6 +20,8 @@ package main
 //     Upgrade: simpan PID master ke /var/run lalu re-attach saat start.
 
 import (
+	"bot-vps-control/internal/shell"
+	"bot-vps-control/internal/tg"
 	"fmt"
 	"html"
 	"os"
@@ -36,6 +38,13 @@ import (
 // ==============================================================================
 // 🧩 STRUKTUR SESI TERMINAL
 // ==============================================================================
+
+// Mode input langsung: admin mengetik perintah di chat dan hasilnya
+// dikirim sebagai pesan baru, bukan ditulis ke panel.
+var (
+	termDirectMu   sync.Mutex
+	termDirectMode = make(map[int64]bool)
+)
 
 type TermSession struct {
 	Mu        sync.Mutex
@@ -121,7 +130,7 @@ func findShell() string {
 
 // termStartDir menentukan direktori awal sesi terminal.
 func termStartDir() string {
-	home := getHomeDir()
+	home := shell.GetHomeDir()
 	if home != "" {
 		if st, err := os.Stat(home); err == nil && st.IsDir() {
 			return home
@@ -138,7 +147,7 @@ func termStartDir() string {
 // ==============================================================================
 
 // getOrCreateSession mengembalikan sesi milik admin, membuatnya bila belum ada.
-func getOrCreateSession(userID int64) (*TermSession, error) {
+func GetOrCreateSession(userID int64) (*TermSession, error) {
 	termSessionsMu.Lock()
 
 	if s, ok := termSessions[userID]; ok {
@@ -478,7 +487,7 @@ func KillSession(userID int64) bool {
 
 // reapIdleSessions membunuh sesi yang menganggur terlalu lama.
 // Mencegah shell hidup selamanya memakan RAM VPS.
-func reapIdleSessions() {
+func ReapIdleSessions() {
 	termSessionsMu.Lock()
 	defer termSessionsMu.Unlock()
 	now := time.Now()
@@ -691,12 +700,12 @@ var _ = termParseInt
 // shell PTY, dan user memantau lewat /term.
 
 // termHandleApt menjalankan operasi apt di dalam sesi terminal.
-func termHandleApt(chatID int64, userID int64, sub string) {
+func TermHandleApt(chatID int64, userID int64, sub string) {
 	sub = strings.ToLower(strings.TrimSpace(sub))
 
-	if _, err := getOrCreateSession(userID); err != nil {
-		updatePanel(userID, chatID, "❌ <b>Gagal membuka terminal:</b>\n<pre>"+
-			html.EscapeString(err.Error())+"</pre>", backToTerminalKeyboard())
+	if _, err := GetOrCreateSession(userID); err != nil {
+		tg.UpdatePanel(userID, chatID, "❌ <b>Gagal membuka terminal:</b>\n<pre>"+
+			html.EscapeString(err.Error())+"</pre>", BackToTerminalKeyboard())
 		return
 	}
 
@@ -709,7 +718,7 @@ func termHandleApt(chatID int64, userID int64, sub string) {
 	var cmd string
 	switch sub {
 	case "", "help", "?":
-		updatePanel(userID, chatID, rootWarning+
+		tg.UpdatePanel(userID, chatID, rootWarning+
 			"📦 <b>Bantuan APT lewat Terminal</b>\n"+
 			"━━━━━━━━━━━━━━━━━━━━\n"+
 			"• <code>/term apt check</code> — cek lock & proses apt (jalankan dulu)\n"+
@@ -721,17 +730,17 @@ func termHandleApt(chatID int64, userID int64, sub string) {
 			"• <code>/term apt clean</code> — bersihkan cache paket\n\n"+
 			"<b>Untuk jawab prompt debconf:</b> kirim jawabannya langsung "+
 			"(mis. <code>y</code>), lalu <code>/term</code> untuk melihat hasilnya.",
-			backToTerminalKeyboard())
+			BackToTerminalKeyboard())
 		return
 
 	case "check", "lock":
 		// Cek apakah ada proses apt/dpkg lain yang memegang lock.
 		if err := SendToTerminal(userID, termAptCheckScript()+"\n"); err != nil {
-			updatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), backToTerminalKeyboard())
+			tg.UpdatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
 			return
 		}
-		text, kb := renderTerminal(userID)
-		updatePanel(userID, chatID, text, kb)
+		text, kb := RenderTerminal(userID)
+		tg.UpdatePanel(userID, chatID, text, kb)
 		return
 
 	case "update":
@@ -763,22 +772,22 @@ func termHandleApt(chatID int64, userID int64, sub string) {
 		cmd = termAptPrefix() + "apt-get update && " + termAptPrefix() + "apt-get upgrade"
 
 	default:
-		updatePanel(userID, chatID, "⚠️ Sub-perintah apt tidak dikenal: <code>"+
+		tg.UpdatePanel(userID, chatID, "⚠️ Sub-perintah apt tidak dikenal: <code>"+
 			html.EscapeString(sub)+"</code>\n\nKetik <code>/term apt</code> untuk bantuan.",
-			backToTerminalKeyboard())
+			BackToTerminalKeyboard())
 		return
 	}
 
 	if err := SendToTerminal(userID, cmd+"\n"); err != nil {
-		updatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), backToTerminalKeyboard())
+		tg.UpdatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
 		return
 	}
 
 	// Satu panel menampilkan: peringatan (bila ada), perintah yang jalan, dan hasil.
 	// Tidak ada lagi 3 pesan terpisah untuk satu perintah apt.
 	time.Sleep(3 * time.Second)
-	body, kb := renderTerminal(userID)
-	updatePanel(userID, chatID, rootWarning+
+	body, kb := RenderTerminal(userID)
+	tg.UpdatePanel(userID, chatID, rootWarning+
 		"📦 <i>Menjalankan:</i> <code>"+html.EscapeString(cmd)+"</code>\n\n"+body, kb)
 }
 
@@ -834,7 +843,7 @@ func ClearScreen(userID int64) error {
 //   - Perintah lengkap tetap tersedia lewat /commands bila diperlukan.
 
 // helpText mengembalikan bantuan utama — ringkas, hanya yang penting.
-func helpText() string {
+func HelpText() string {
 	return "🤖 <b>Bot VPS Control</b>\n" +
 		"━━━━━━━━━━━━━━━━━━━━\n\n" +
 		"🖥️ <b>Terminal Interaktif</b> <i>(fitur utama)</i>\n" +
@@ -872,9 +881,9 @@ func helpText() string {
 }
 
 // helpKeyboard menyediakan tombol akses cepat ke fitur yang paling sering dipakai.
-func helpKeyboard() *InlineKeyboardMarkup {
-	return &InlineKeyboardMarkup{
-		InlineKeyboard: [][]InlineKeyboardButton{
+func HelpKeyboard() *tg.InlineKeyboardMarkup {
+	return &tg.InlineKeyboardMarkup{
+		InlineKeyboard: [][]tg.InlineKeyboardButton{
 			{
 				{Text: "🖥️ Terminal", CallbackData: "hp:t"},
 				{Text: "📁 File Manager", CallbackData: "hp:f"},
@@ -898,7 +907,7 @@ func helpKeyboard() *InlineKeyboardMarkup {
 }
 
 // commandsPlainText mengembalikan daftar perintah lengkap — untuk yang butuh detail.
-func commandsPlainText() string {
+func CommandsPlainText() string {
 	return "📋 <b>Daftar Perintah Lengkap</b>\n" +
 		"━━━━━━━━━━━━━━━━━━━━\n\n" +
 		"🖥️ <b>Terminal</b>\n" +
@@ -951,4 +960,298 @@ func commandsPlainText() string {
 		"⚙️ <b>Kontrol</b>\n" +
 		"<code>/exec &lt;cmd&gt;</code> — perintah sekali jalan (tanpa state)\n" +
 		"<code>/reboot confirm</code> — restart VPS"
+}
+
+// ==============================================================================
+// 🖥️ TERMINAL UI RENDERER (Level 3 — PTY Interaktif)
+// ==============================================================================
+
+// renderTerminal menggambar panel terminal dengan tombol kontrol.
+func RenderTerminal(userID int64) (string, *tg.InlineKeyboardMarkup) {
+	var b strings.Builder
+	b.WriteString("🖥️ <b>Interactive Terminal</b>\n")
+	b.WriteString(fmt.Sprintf("<i>%s</i>\n", html.EscapeString(SessionInfo(userID))))
+	b.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
+
+	out, err := ReadScreen(userID)
+	if err != nil {
+		b.WriteString(fmt.Sprintf("⚠️ <i>%s</i>\n", html.EscapeString(err.Error())))
+		b.WriteString("\n💡 Kirim <code>/term</code> untuk membuat sesi baru.")
+	} else if out == "" {
+		b.WriteString("<i>(belum ada output)</i>")
+	} else {
+		// Telegram membatasi 4096 karakter. Untuk output panjang seperti
+		// `apt upgrade`, bagian AWAL (daftar paket) dan AKHIR (hasil/error)
+		// sama pentingnya — jadi keduanya ditampilkan, bagian tengah dipotong.
+		const maxShown = 3400
+		shown := out
+		truncated := 0
+		if len(out) > maxShown {
+			headLen := maxShown * 2 / 5 // 40% untuk bagian awal
+			tailLen := maxShown - headLen
+			truncated = len(out) - headLen - tailLen
+			shown = out[:headLen] + "\n\n... [dipotong " + strconv.Itoa(truncated) + " karakter] ...\n\n" + out[len(out)-tailLen:]
+		}
+		b.WriteString(fmt.Sprintf("<pre>%s</pre>", html.EscapeString(shown)))
+		if truncated > 0 {
+			b.WriteString(fmt.Sprintf("\n<i>⚠️ Output panjang (%d karakter). Kirim <code>/term log</code> untuk log penuh.</i>", len(out)))
+		}
+	}
+
+	kb := &tg.InlineKeyboardMarkup{
+		InlineKeyboard: [][]tg.InlineKeyboardButton{
+			{
+				{Text: "🔄 Refresh", CallbackData: "tm:r"},
+				{Text: "🛑 Ctrl+C", CallbackData: "tm:c"},
+			},
+			{
+				{Text: "📋 Info Sesi", CallbackData: "tm:i"},
+				{Text: "💀 Tutup Sesi", CallbackData: "tm:k"},
+			},
+			{
+				{Text: "🏠 Menu Utama", CallbackData: "tm:h"},
+			},
+		},
+	}
+	return b.String(), kb
+}
+
+// backToTerminalKeyboard menyediakan tombol kembali ke panel terminal.
+func BackToTerminalKeyboard() *tg.InlineKeyboardMarkup {
+	return &tg.InlineKeyboardMarkup{
+		InlineKeyboard: [][]tg.InlineKeyboardButton{
+			{
+				{Text: "⬅️ Kembali ke Terminal", CallbackData: "tm:r"},
+			},
+		},
+	}
+}
+
+// terminalHelpText mengembalikan panduan penggunaan terminal.
+func TerminalHelpText() string {
+	return "🖥️ <b>Interactive Terminal (PTY)</b>\n" +
+		"━━━━━━━━━━━━━━━━━━━━\n" +
+		"Shell <b>persisten</b> dengan TTY asli. <code>cd</code>, <code>export</code>, " +
+		"history, dan program yang butuh terminal (<code>sudo</code>, <code>top</code>, <code>apt</code>) berjalan normal.\n\n" +
+		"<b>Perintah:</b>\n" +
+		"• <code>/term</code> — buka / buat sesi terminal\n" +
+		"• <code>/term &lt;perintah&gt;</code> — jalankan satu perintah\n" +
+		"• <code>/term log</code> — log penuh (dikirim sebagai file)\n" +
+		"• <code>/term kill</code> — matikan sesi\n" +
+		"• <code>/term info</code> — status sesi\n\n" +
+		"<b>Mode input langsung:</b> setelah sesi dibuka, kirim teks apa pun " +
+		"(tanpa garis miring) ke chat dan teks itu masuk ke stdin shell.\n" +
+		"Aktifkan dengan <code>/term mode on</code>, matikan dengan <code>/term mode off</code>.\n\n" +
+		"<b>Pintasan Ctrl:</b>\n" +
+		"• <code>/term ^c</code> — kirim Ctrl+C (SIGINT)\n" +
+		"• <code>/term ^d</code> — kirim Ctrl+D (EOF / keluar)\n" +
+		"• <code>/term ^z</code> — kirim Ctrl+Z (SIGTSTP)\n\n" +
+		"<b>Paket (apt):</b>\n" +
+		"• <code>/term apt check</code> — cek lock & hak root (jalankan dulu)\n" +
+		"• <code>/term apt update</code> — perbarui daftar paket\n" +
+		"• <code>/term apt upgrade</code> — upgrade (prompt bisa dijawab)\n" +
+		"• <code>/term apt safe</code> — upgrade non-interaktif\n" +
+		"• <code>/term apt full</code> — full-upgrade\n" +
+		"• <code>/term clear</code> — bersihkan layar\n\n" +
+		"⚠️ <i>Sesi otomatis ditutup setelah 30 menit menganggur.</i>"
+}
+
+// ==============================================================================
+// 🖥️ TERMINAL COMMAND HANDLER (Level 3)
+// ==============================================================================
+
+// handleTerminalCommand menangani perintah /term dan turunannya.
+func HandleTerminalCommand(chatID int64, userID int64, rawText string) {
+	fields := strings.Fields(rawText)
+
+	// /term tanpa argumen -> buka atau tampilkan panel terminal
+	if len(fields) < 2 {
+		if _, err := GetOrCreateSession(userID); err != nil {
+			tg.SendOnce(userID, chatID, fmt.Sprintf("❌ <b>Gagal membuka terminal:</b>\n<pre>%s</pre>\n\n"+
+				"<i>Pastikan /dev/pts ter-mount dan bot berjalan sebagai user yang berhak.</i>",
+				html.EscapeString(err.Error())))
+			return
+		}
+		// Panel yang sama dipakai ulang — /term berulang tidak menumpuk pesan.
+		text, kb := RenderTerminal(userID)
+		tg.UpdatePanel(userID, chatID, text, kb)
+		return
+	}
+
+	sub := strings.ToLower(fields[1])
+	// Argumen perintah asli (case dipertahankan)
+	argRaw := strings.TrimSpace(strings.TrimPrefix(rawText, fields[0]))
+	argRaw = strings.TrimSpace(strings.TrimPrefix(argRaw, fields[1]))
+
+	switch sub {
+	case "help", "?":
+		// Bantuan terminal TIDAK lagi jadi pesan baru — masuk ke panel.
+		tg.UpdatePanel(userID, chatID, TerminalHelpText(), BackToTerminalKeyboard())
+
+	case "info", "status":
+		if _, err := GetOrCreateSession(userID); err != nil {
+			tg.UpdatePanel(userID, chatID, "❌ <i>Tidak ada sesi terminal:</i> "+
+				html.EscapeString(err.Error()), BackToTerminalKeyboard())
+			return
+		}
+		tg.UpdatePanel(userID, chatID,
+			"📋 <b>Status Sesi:</b>\n<code>"+html.EscapeString(SessionInfo(userID))+"</code>\n\n"+
+				"<i>Ketik /term untuk kembali ke panel terminal.</i>",
+			BackToTerminalKeyboard())
+
+	case "kill", "close", "exit":
+		if KillSession(userID) {
+			tg.UpdatePanel(userID, chatID,
+				"💀 <b>Sesi terminal ditutup.</b>\n\nKetik <code>/term</code> untuk memulai sesi baru.", nil)
+			tg.ClearPanel(userID)
+		} else {
+			tg.UpdatePanel(userID, chatID,
+				"⚠️ <i>Tidak ada sesi terminal yang aktif.</i>\n\nKetik <code>/term</code> untuk membuat sesi.",
+				BackToTerminalKeyboard())
+		}
+
+	case "log":
+		out, err := ReadScreen(userID)
+		if err != nil {
+			tg.UpdatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
+			return
+		}
+		if out == "" {
+			tg.UpdatePanel(userID, chatID, "📄 <i>Buffer terminal kosong.</i>", BackToTerminalKeyboard())
+			return
+		}
+		// Log dikirim sebagai FILE — tidak mengotori chat dengan teks raksasa.
+		fname := fmt.Sprintf("terminal_log_%d.txt", time.Now().Unix())
+		_ = tg.SendTelegramDocument(chatID, fname, []byte(out), "📄 <i>Log penuh sesi terminal</i>")
+
+	case "apt":
+		TermHandleApt(chatID, userID, argRaw)
+
+	case "clear", "cls":
+		if err := ClearScreen(userID); err != nil {
+			tg.UpdatePanel(userID, chatID, "⚠️ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
+		} else {
+			// Sungguhan membersihkan layar PTY, bukan cuma buffer bot.
+			_ = SendToTerminal(userID, "clear\n")
+			text, kb := RenderTerminal(userID)
+			tg.UpdatePanel(userID, chatID, text, kb)
+		}
+
+	case "mode":
+		mode := ""
+		if len(fields) >= 3 {
+			mode = strings.ToLower(fields[2])
+		}
+		switch mode {
+		case "on":
+			termDirectMu.Lock()
+			termDirectMode[userID] = true
+			termDirectMu.Unlock()
+			tg.UpdatePanel(userID, chatID, "✅ <b>Mode input langsung AKTIF.</b>\n\n"+
+				"Kirim teks apa pun ke chat dan teks itu masuk ke stdin shell.\n"+
+				"Matikan dengan <code>/term mode off</code>.\n\n"+
+				"⚠️ <i>Perintah yang diawali / tetap diproses sebagai perintah bot.</i>",
+				BackToTerminalKeyboard())
+		case "off":
+			termDirectMu.Lock()
+			delete(termDirectMode, userID)
+			termDirectMu.Unlock()
+			tg.UpdatePanel(userID, chatID, "🔕 <b>Mode input langsung NONAKTIF.</b>\n\n"+
+				"Gunakan <code>/term &lt;perintah&gt;</code> untuk mengirim perintah.",
+				BackToTerminalKeyboard())
+		default:
+			status := "nonaktif"
+			termDirectMu.Lock()
+			if termDirectMode[userID] {
+				status = "aktif"
+			}
+			termDirectMu.Unlock()
+			tg.UpdatePanel(userID, chatID,
+				fmt.Sprintf("ℹ️ Mode input langsung: <b>%s</b>\n\nGunakan <code>/term mode on|off</code>.", status),
+				BackToTerminalKeyboard())
+		}
+
+	case "^c", "ctrl-c", "ctrlc":
+		TermHandleSignal(chatID, userID, syscall.SIGINT, "Ctrl+C (SIGINT)")
+
+	case "^d", "ctrl-d", "ctrld":
+		TermHandleSignal(chatID, userID, syscall.SIGHUP, "Ctrl+D / EOF")
+
+	case "^z", "ctrl-z", "ctrlz":
+		TermHandleSignal(chatID, userID, syscall.SIGTSTP, "Ctrl+Z (SIGTSTP)")
+
+	default:
+		// Sisa argumen diperlakukan sebagai perintah shell.
+		cmdToSend := argRaw
+		if cmdToSend == "" {
+			cmdToSend = sub
+		}
+		TermExecAndShow(chatID, userID, cmdToSend)
+	}
+}
+
+// termExecAndShow menyuntik satu perintah ke shell lalu menampilkan hasilnya.
+func TermExecAndShow(chatID int64, userID int64, cmd string) {
+	if _, err := GetOrCreateSession(userID); err != nil {
+		tg.UpdatePanel(userID, chatID,
+			fmt.Sprintf("❌ <b>Gagal membuka terminal:</b>\n<pre>%s</pre>", html.EscapeString(err.Error())),
+			BackToTerminalKeyboard())
+		return
+	}
+
+	// Kirim perintah + newline. Shell yang mengeksekusinya, bukan bot.
+	if err := SendToTerminal(userID, cmd+"\n"); err != nil {
+		tg.UpdatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
+		return
+	}
+
+	// Hasil masuk ke panel yang SAMA — chat tidak bertambah.
+	text, kb := RenderTerminal(userID)
+	tg.UpdatePanel(userID, chatID, text, kb)
+}
+
+// termHandleSignal mengirim sinyal ke proses foreground sesi lalu me-refresh panel.
+func TermHandleSignal(chatID int64, userID int64, sig syscall.Signal, label string) {
+	if err := SendSignal(userID, sig, label); err != nil {
+		tg.UpdatePanel(userID, chatID, "⚠️ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
+		return
+	}
+	text, kb := RenderTerminal(userID)
+	tg.UpdatePanel(userID, chatID, text, kb)
+}
+
+// HasTerminalSession melaporkan apakah admin punya sesi terminal yang masih hidup.
+func HasTerminalSession(userID int64) bool {
+	termSessionsMu.Lock()
+	defer termSessionsMu.Unlock()
+	s, ok := termSessions[userID]
+	if !ok {
+		return false
+	}
+	s.Mu.Lock()
+	alive := s.Alive
+	s.Mu.Unlock()
+	return alive
+}
+
+// IsTerminalDirectMode melaporkan apakah admin memakai mode input langsung.
+func IsTerminalDirectMode(userID int64) bool {
+	termDirectMu.Lock()
+	defer termDirectMu.Unlock()
+	return termDirectMode[userID]
+}
+
+// SendRawToTerminal mengirim teks mentah dari chat ke stdin shell.
+func SendRawToTerminal(chatID int64, userID int64, text string) {
+	if _, err := GetOrCreateSession(userID); err != nil {
+		tg.UpdatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
+		return
+	}
+	if err := SendToTerminal(userID, text+"\n"); err != nil {
+		tg.UpdatePanel(userID, chatID, "❌ "+html.EscapeString(err.Error()), BackToTerminalKeyboard())
+		return
+	}
+	// Tetap satu panel: setiap perintah menulis ulang pesan yang sama.
+	text2, kb := RenderTerminal(userID)
+	tg.UpdatePanel(userID, chatID, text2, kb)
 }

@@ -1,4 +1,4 @@
-package main
+package term
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ func TestAptCommandBuild(t *testing.T) {
 	uid := int64(991001)
 	defer KillSession(uid)
 
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Skipf("PTY tidak tersedia: %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestLongOutputNotLost(t *testing.T) {
 	uid := int64(991002)
 	defer KillSession(uid)
 
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Skipf("PTY tidak tersedia: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestClearScreen(t *testing.T) {
 	uid := int64(991003)
 	defer KillSession(uid)
 
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Skipf("PTY tidak tersedia: %v", err)
 	}
 	SendToTerminal(uid, "echo ISI_SEBELUM_CLEAR\n")
@@ -126,7 +126,7 @@ func TestAptCancelable(t *testing.T) {
 	uid := int64(991004)
 	defer KillSession(uid)
 
-	if _, err := getOrCreateSession(uid); err != nil {
+	if _, err := GetOrCreateSession(uid); err != nil {
 		t.Skipf("PTY tidak tersedia: %v", err)
 	}
 

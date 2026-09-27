@@ -2,10 +2,11 @@ package main
 
 import (
 	"archive/zip"
+	"bot-vps-control/internal/shell"
 	"bot-vps-control/internal/tg"
+	"bot-vps-control/internal/update"
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -90,9 +91,10 @@ func loadConfig() {
 	// Repositori sumber rilis untuk fitur /update jalur unduh.
 	// Bisa diganti bila memakai fork.
 	if repo := strings.TrimSpace(os.Getenv("UPDATE_REPO")); repo != "" {
-		repoTuanRumah = strings.TrimPrefix(repo, "https://github.com/")
-		repoTuanRumah = strings.TrimSuffix(repoTuanRumah, ".git")
-		repoTuanRumah = strings.Trim(repoTuanRumah, "/")
+		repo = strings.TrimPrefix(repo, "https://github.com/")
+		repo = strings.TrimSuffix(repo, ".git")
+		repo = strings.Trim(repo, "/")
+		update.SetRepo(repo)
 	}
 
 	// Ambil Admin IDs
@@ -362,45 +364,12 @@ func formatBytes(bytes int64) string {
 }
 
 // runBashCommand mengeksekusi shell command dengan timeout dan isolasi process group
-func runBashCommand(cmdStr string, timeoutSec int) (int, string, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
-	defer cancel()
+// runBashCommand adalah alias ke internal/shell. Bertahan sementara supaya
+// file fitur yang belum dipindah tidak harus diubah semua sekaligus.
+var runBashCommand = shell.Run
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", cmdStr)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Start()
-	if err != nil {
-		return -1, "", fmt.Sprintf("Gagal menjalankan proses: %v", err)
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-
-	select {
-	case <-ctx.Done():
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
-		return -1, "", "⛔ Perintah dibatalkan: Timeout (melebihi batas waktu)."
-	case err = <-done:
-		exitCode := 0
-		if err != nil {
-			if exitError, ok := err.(*exec.ExitError); ok {
-				exitCode = exitError.ExitCode()
-			} else {
-				exitCode = -1
-			}
-		}
-		return exitCode, strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String())
-	}
-}
+// shellQuote likewise — lihat runBashCommand.
+var shellQuote = shell.Quote
 
 // ==============================================================================
 // 🪟 PANEL TUNGGAL — MENCEGAH CHAT PENUH
@@ -2312,7 +2281,7 @@ func main() {
 				handleTerminalCommand(chatID, userID, rawText)
 
 			case "/update", "/upgrade":
-				handleUpdateCommand(chatID, userID, rawText)
+				update.HandleUpdateCommand(chatID, userID, rawText)
 
 			case "/unduh", "/wget", "/download-url":
 				handleUnduhURL(chatID, userID, rawText)

@@ -25,6 +25,7 @@ package main
 //     Tanpa itu, menutup bot akan ikut mematikan semua proyek yang dikelola.
 
 import (
+	"bot-vps-control/internal/update"
 	"bytes"
 	"fmt"
 	"io"
@@ -148,8 +149,8 @@ func siapkanDirDeploy(userID int64) (string, string) {
 	dir, err := dirDeployPengguna(userID)
 	if err != nil {
 		pesan := "❌ <b>Tidak bisa menyiapkan direktori proyek.</b>\n\n" +
-			"<code>" + htmlEscapeRingkas(err.Error(), 300) + "</code>\n\n" +
-			"Lokasi saat ini: <code>" + htmlEscapeRingkas(DirDeploy, 200) + "</code>\n\n" +
+			"<code>" + update.HtmlEscapeRingkas(err.Error(), 300) + "</code>\n\n" +
+			"Lokasi saat ini: <code>" + update.HtmlEscapeRingkas(DirDeploy, 200) + "</code>\n\n" +
 			"<i>Setel lokasi lain yang bisa ditulis lewat variabel</i> " +
 			"<code>DEPLOY_DIR</code>."
 		return dir, pesan
@@ -160,7 +161,7 @@ func siapkanDirDeploy(userID int64) (string, string) {
 	uji := filepath.Join(dir, ".uji-tulis")
 	if err := os.WriteFile(uji, []byte("uji"), 0o644); err != nil {
 		pesan := "❌ <b>Direktori tidak bisa ditulis.</b>\n\n" +
-			"<code>" + htmlEscapeRingkas(dir, 300) + "</code>\n\n" +
+			"<code>" + update.HtmlEscapeRingkas(dir, 300) + "</code>\n\n" +
 			"<i>Setel lokasi lain lewat variabel</i> <code>DEPLOY_DIR</code>."
 		return dir, pesan
 	}
@@ -662,7 +663,7 @@ func jalankanProyekDeploy(userID int64, proyek string) (bool, string) {
 
 	perintah, err := perintahJalan(dir, bahasa, entry)
 	if err != nil {
-		return false, "❌ " + htmlEscapeRingkas(err.Error(), 200)
+		return false, "❌ " + update.HtmlEscapeRingkas(err.Error(), 200)
 	}
 
 	pidFile := berkasPIDDeploy(scr)
@@ -684,7 +685,7 @@ func jalankanProyekDeploy(userID int64, proyek string) (bool, string) {
 		// sebabnya tanpa harus membuka menu Log.
 		return false, "❌ <b>Proyek langsung berhenti.</b>\n\n" +
 			"Kemungkinan ada kesalahan saat start:\n<pre>" +
-			htmlEscapeRingkas(bacaEkorLogDeploy(scr, 700), 900) + "</pre>"
+			update.HtmlEscapeRingkas(bacaEkorLogDeploy(scr, 700), 900) + "</pre>"
 	}
 
 	os.WriteFile(waktuFile, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644)

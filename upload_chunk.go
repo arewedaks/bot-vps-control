@@ -275,10 +275,6 @@ func namaDariURL(url string) string {
 }
 
 // shellQuote membungkus argumen agar aman dipakai di shell.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // ==============================================================================
 // 2️⃣ UPLOAD BERTAHAP (CHUNK)
 // ==============================================================================

@@ -1,4 +1,4 @@
-package main
+package update
 
 import (
 	"io"
@@ -37,21 +37,19 @@ func TestKeluaranGitAmanDikirim(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	lamaURL := ApiUrl
+	// Klien HTTP tinggal di internal/tg, jadi endpoint yang diuji ada di sana.
 	lamaTg := tg.ApiUrl
-	ApiUrl = srv.URL
-	// Klien HTTP sudah pindah ke internal/tg, jadi endpoint-nya di situ.
 	tg.ApiUrl = srv.URL
-	defer func() { ApiUrl = lamaURL; tg.ApiUrl = lamaTg }()
+	defer func() { tg.ApiUrl = lamaTg }()
 
 	// Keluaran git yang realistis: penuh <, >, &, dan tanda kutip.
 	keluaranGit := "error: cannot use x (type <T>) as type <U> in assignment\n" +
 		"  at main.go:42\n  symbols: a & b, \"quoted\", 'single'\n" +
 		"  map[string]interface{} vs []int\n"
 
-	pesan := "❌ <b>Build gagal.</b>\n<pre>" + htmlEscapeRingkas(keluaranGit, 2000) + "</pre>"
+	pesan := "❌ <b>Build gagal.</b>\n<pre>" + HtmlEscapeRingkas(keluaranGit, 2000) + "</pre>"
 
-	sendTelegram(777, pesan)
+	tg.SendTelegram(777, pesan)
 
 	if !strings.Contains(diterima, `"text"`) {
 		t.Fatal("pesan tidak terkirim")
@@ -70,7 +68,7 @@ func TestKeluaranGitAmanDikirim(t *testing.T) {
 // justru saat pengguna paling membutuhkan kejelasan.
 func TestEscapingAmpersandTidakDimainkanDuaKali(t *testing.T) {
 	masuk := "a & b"
-	sekali := htmlEscapeRingkas(masuk, 100)
+	sekali := HtmlEscapeRingkas(masuk, 100)
 	if !strings.Contains(sekali, "&amp;") {
 		t.Fatalf("escape pertama gagal: %q", sekali)
 	}

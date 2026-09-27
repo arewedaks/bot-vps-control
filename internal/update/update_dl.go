@@ -1,4 +1,4 @@
-package main
+package update
 
 // ==============================================================================
 // ⬇️ UPDATE RINGAN — UNDUH BINARY JADI DARI GITHUB
@@ -17,6 +17,7 @@ package main
 //   - Pemasangan tetap lewat os.Rename, jadi binary lama utuh bila gagal.
 
 import (
+	"bot-vps-control/internal/shell"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -33,6 +34,15 @@ import (
 // repoTuanRumah adalah sumber rilis. Bisa diubah di .env dengan
 // UPDATE_REPO=user/repo bila fork dipakai.
 var repoTuanRumah = "arewedaks/bot-vps-control"
+
+// SetRepo menunjuk fitur update ke fork lain.
+//
+// Nilai diisi sekali saat startup dari environment; setelah itu dibaca dari
+// mana saja lewat repoTuanRumah. Jangan dipanggil berkali-kali atau dari
+// goroutine lain: ini konfigurasi proses, bukan state per-pengguna.
+func SetRepo(repo string) {
+	repoTuanRumah = repo
+}
 
 // Nama arsitektur Go → nama yang dipakai file rilis.
 //
@@ -226,15 +236,15 @@ func periksaChecksum(path string, namaBerkas string, daftar map[string]string) (
 	hash, err := hashBerkas(path)
 	if err != nil {
 		return false, "❌ <b>Gagal membaca berkas hasil unduhan.</b>\n<pre>" +
-			htmlEscapeRingkas(err.Error(), 300) + "</pre>"
+			HtmlEscapeRingkas(err.Error(), 300) + "</pre>"
 	}
 
 	if mau != hash {
 		return false, "❌ <b>Checksum tidak cocok — unduhan dibatalkan.</b>\n\n" +
 			"Berkas mungkin rusak saat diunduh, atau diubah di tengah jalan. " +
 			"Binary lama tetap dipakai.\n\n" +
-			"<b>Diharapkan:</b> <code>" + htmlEscapeRingkas(panjangAman(mau, 16), 20) + "…</code>\n" +
-			"<b>Hasil hitung:</b> <code>" + htmlEscapeRingkas(panjangAman(hash, 16), 20) + "…</code>\n\n" +
+			"<b>Diharapkan:</b> <code>" + HtmlEscapeRingkas(panjangAman(mau, 16), 20) + "…</code>\n" +
+			"<b>Hasil hitung:</b> <code>" + HtmlEscapeRingkas(panjangAman(hash, 16), 20) + "…</code>\n\n" +
 			"Ulangi beberapa saat lagi, atau pasang manual."
 	}
 
@@ -302,14 +312,14 @@ func jalankanUpdateUnduh(dir string, onProgress func(string)) (sukses bool, pesa
 			"Bot ini berjalan sebagai proses utama container (<code>PID 1</code>), " +
 			"jadi ia tidak bisa mengganti dirinya sendiri.\n\n" +
 			"Restart container dari <b>host</b> (di luar container):\n" +
-			"<pre>docker restart " + htmlEscapeRingkas(namaContainer(), 60) + "</pre>\n" +
+			"<pre>docker restart " + HtmlEscapeRingkas(namaContainer(), 60) + "</pre>\n" +
 			"Setelah itu kirim <code>/ping</code> untuk memastikan versi baru jalan." + catatan
 	}
 
 	if layananSystemdAktif() {
 		go func() {
 			time.Sleep(1200 * time.Millisecond)
-			runBashCommand("systemctl restart "+namaLayananSystemd(), 30)
+			shell.Run("systemctl restart "+namaLayananSystemd(), 30)
 		}()
 		return true, "✅ <b>Update berhasil.</b>\n\n" +
 			"Versi baru dipasang" + versiRingkasUpdate(hasil.versi) + " " +
@@ -320,14 +330,14 @@ func jalankanUpdateUnduh(dir string, onProgress func(string)) (sukses bool, pesa
 
 	script := fmt.Sprintf(
 		"sleep 2; cd %s && setsid nohup ./%s >> /tmp/bot_vps_update.log 2>&1 < /dev/null &",
-		shellQuote(dir), updateBinaryName)
+		shell.Quote(dir), updateBinaryName)
 
 	detach := exec.Command("sh", "-c", script)
 	detach.Dir = dir
 	detach.Stdin = nil
 	if err := detach.Start(); err != nil {
 		return false, "❌ <b>Binary sudah dipasang, tapi gagal menjalankan proses baru.</b>\n" +
-			"<pre>" + htmlEscapeRingkas(err.Error(), 300) + "</pre>\n\n" +
+			"<pre>" + HtmlEscapeRingkas(err.Error(), 300) + "</pre>\n\n" +
 			"Jalankan manual: <code>/term ./" + updateBinaryName + "</code>"
 	}
 
@@ -379,7 +389,7 @@ func unduhDanPasang(dir string, onProgress func(string)) (bool, string, hasilUnd
 	arch := namaArsitekturRilis(runtime.GOARCH)
 	if runtime.GOOS != "linux" {
 		return false, "❌ <b>Update unduh hanya untuk Linux.</b>\n\n" +
-			"Sistem ini: <code>" + htmlEscapeRingkas(runtime.GOOS+"/"+runtime.GOARCH, 40) + "</code>\n" +
+			"Sistem ini: <code>" + HtmlEscapeRingkas(runtime.GOOS+"/"+runtime.GOARCH, 40) + "</code>\n" +
 			"Pasang manual atau bangun dari sumber.", hasil
 	}
 
@@ -396,8 +406,8 @@ func unduhDanPasang(dir string, onProgress func(string)) (bool, string, hasilUnd
 	if _, err := ambilURL(klien, alamatRilis(versi, namaBerkas), tempPath, 64<<20); err != nil {
 		os.Remove(tempPath)
 		return false, "❌ <b>Gagal mengunduh binary.</b>\n\n" +
-			"Berkas: <code>" + htmlEscapeRingkas(namaBerkas, 60) + "</code>\n" +
-			"<pre>" + htmlEscapeRingkas(err.Error(), 400) + "</pre>\n\n" +
+			"Berkas: <code>" + HtmlEscapeRingkas(namaBerkas, 60) + "</code>\n" +
+			"<pre>" + HtmlEscapeRingkas(err.Error(), 400) + "</pre>\n\n" +
 			"Pastikan Release sudah dibuat:\n" +
 			"<code>git tag v1.0.0 &amp;&amp; git push origin v1.0.0</code>", hasil
 	}
@@ -434,7 +444,7 @@ func unduhDanPasang(dir string, onProgress func(string)) (bool, string, hasilUnd
 	if err := os.Chmod(tempPath, 0o755); err != nil {
 		os.Remove(tempPath)
 		return false, "❌ <b>Gagal memberi izin eksekusi.</b>\n<pre>" +
-			htmlEscapeRingkas(err.Error(), 300) + "</pre>", hasil
+			HtmlEscapeRingkas(err.Error(), 300) + "</pre>", hasil
 	}
 
 	if err := ujiBinary(tempPath, dir); err != nil {
@@ -442,7 +452,7 @@ func unduhDanPasang(dir string, onProgress func(string)) (bool, string, hasilUnd
 		return false, "❌ <b>Binary baru tidak bisa dijalankan.</b>\n\n" +
 			"Kemungkinan arsitektur tidak cocok, atau berkas rusak. " +
 			"Binary lama tetap dipakai.\n\n" +
-			"<pre>" + htmlEscapeRingkas(err.Error(), 400) + "</pre>", hasil
+			"<pre>" + HtmlEscapeRingkas(err.Error(), 400) + "</pre>", hasil
 	}
 
 	// ---- Pasang ---- //
@@ -452,7 +462,7 @@ func unduhDanPasang(dir string, onProgress func(string)) (bool, string, hasilUnd
 	if err := os.Rename(tempPath, binPath); err != nil {
 		os.Remove(tempPath)
 		return false, "❌ <b>Gagal memasang binary.</b>\n<pre>" +
-			htmlEscapeRingkas(err.Error(), 300) + "</pre>", hasil
+			HtmlEscapeRingkas(err.Error(), 300) + "</pre>", hasil
 	}
 	_ = os.Chmod(binPath, 0o755)
 
@@ -484,7 +494,7 @@ func versiRingkasUpdate(versi string) string {
 	if versi == "" {
 		return ""
 	}
-	return " <code>" + htmlEscapeRingkas(versi, 40) + "</code>"
+	return " <code>" + HtmlEscapeRingkas(versi, 40) + "</code>"
 }
 
 // ==============================================================================

@@ -1,4 +1,4 @@
-package main
+package update
 
 // ==============================================================================
 // 🔄 UPDATE MANDIRI — /update
@@ -12,6 +12,8 @@ package main
 // bot tetap hidup dengan versi lama — bukan mati tanpa bisa pulih.
 
 import (
+	"bot-vps-control/internal/shell"
+	"bot-vps-control/internal/tg"
 	"fmt"
 	"net/http"
 	"os"
@@ -48,8 +50,22 @@ func repoDir() string {
 			}
 		}
 	}
-	// Cadangan: direktori kerja saat ini.
+	// Cadangan: naik dari direktori kerja sampai ketemu go.mod.
+	//
+	// Hanya memeriksa cwd tidak cukup: proses bisa dijalankan dari
+	// subpackage atau dari /, dan commands git di sana akan gagal tanpa
+	// sebab yang jelas.
 	if wd, err := os.Getwd(); err == nil {
+		for d := wd; ; {
+			if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+				return d
+			}
+			induk := filepath.Dir(d)
+			if induk == d {
+				break
+			}
+			d = induk
+		}
 		return wd
 	}
 	return "."
@@ -192,7 +208,7 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 				"Bot tidak menimpa perubahanmu. Simpan atau buang dulu:\n" +
 				"<code>/term git stash</code> — simpan sementara\n" +
 				"<code>/term git checkout .</code> — buang perubahan\n\n" +
-				"<pre>" + htmlEscapeRingkas(pullOut, 400) + "</pre>"
+				"<pre>" + HtmlEscapeRingkas(pullOut, 400) + "</pre>"
 		}
 
 		// Pull ditolak karena cabang lokal menyimpang dari remote.
@@ -213,7 +229,7 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 		}
 
 		return false, "❌ <b>Gagal menarik kode.</b>\n<pre>" +
-			htmlEscapeRingkas(pullOut, 600) + "</pre>"
+			HtmlEscapeRingkas(pullOut, 600) + "</pre>"
 	}
 
 	// ---- Tahap 2: bangun binary baru ke nama sementara ----
@@ -235,7 +251,7 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 			detail = err.Error()
 		}
 		return false, "❌ <b>Build gagal — bot tetap memakai versi lama.</b>\n" +
-			"<pre>" + htmlEscapeRingkas(detail, 800) + "</pre>"
+			"<pre>" + HtmlEscapeRingkas(detail, 800) + "</pre>"
 	}
 
 	// Pastikan hasil build benar-benar binary yang bisa jalan.
@@ -249,7 +265,7 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 	if err := os.Rename(tempPath, binPath); err != nil {
 		// Rename bisa gagal bila binary terpasang di mount berbeda.
 		return false, "❌ <b>Gagal mengganti binary.</b>\n<pre>" +
-			htmlEscapeRingkas(err.Error(), 300) + "</pre>\n\n" +
+			HtmlEscapeRingkas(err.Error(), 300) + "</pre>\n\n" +
 			"Binary baru tersimpan di <code>" + updateTempName + "</code>."
 	}
 	_ = os.Chmod(binPath, 0o755)
@@ -270,7 +286,7 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 		// Cara paling bersih: serahkan ke systemd (Restart=always).
 		go func() {
 			time.Sleep(1200 * time.Millisecond)
-			runBashCommand("systemctl restart "+namaLayananSystemd(), 30)
+			shell.Run("systemctl restart "+namaLayananSystemd(), 30)
 		}()
 		return true, "✅ <b>Update berhasil.</b>\n\n" +
 			"Bot dibangun ulang dan layanan sedang di-restart.\n" +
@@ -283,14 +299,14 @@ func jalankanUpdate(onProgress func(string)) (sukses bool, pesan string) {
 	// ia tidak ikut mati bersama proses ini.
 	script := fmt.Sprintf(
 		"sleep 2; cd %s && setsid nohup ./%s >> /tmp/bot_vps_update.log 2>&1 < /dev/null &",
-		shellQuote(dir), updateBinaryName)
+		shell.Quote(dir), updateBinaryName)
 
 	detach := exec.Command("sh", "-c", script)
 	detach.Dir = dir
 	detach.Stdin = nil
 	if err := detach.Start(); err != nil {
 		return false, "❌ <b>Binary sudah diganti, tapi gagal memulai proses baru.</b>\n" +
-			"<pre>" + htmlEscapeRingkas(err.Error(), 300) + "</pre>\n\n" +
+			"<pre>" + HtmlEscapeRingkas(err.Error(), 300) + "</pre>\n\n" +
 			"Jalankan manual: <code>/term ./" + updateBinaryName + "</code>"
 	}
 
@@ -341,7 +357,7 @@ func namaLayananSystemd() string {
 //
 // Tanpa escape, keluaran git yang memuat "<" atau "&" akan membuat Telegram
 // menolak pesan seluruhnya.
-func htmlEscapeRingkas(s string, maks int) string {
+func HtmlEscapeRingkas(s string, maks int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > maks {
 		s = s[:maks] + "\n… dipotong"
@@ -363,7 +379,7 @@ func htmlEscapeRingkas(s string, maks int) string {
 //	/update          — tampilkan status dan tawaran update
 //	/update cek      — hanya memeriksa, tidak mengubah apa pun
 //	/update confirm  — jalankan update
-func handleUpdateCommand(chatID int64, userID int64, rawText string) {
+func HandleUpdateCommand(chatID int64, userID int64, rawText string) {
 	arg := ""
 	if p := strings.SplitN(rawText, " ", 2); len(p) == 2 {
 		arg = strings.ToLower(strings.TrimSpace(p[1]))
@@ -381,9 +397,9 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 	// Memeriksa git lebih dulu akan menolak kasus yang justru paling butuh
 	// jalur unduh: VPS spek rendah yang tidak sanggup mengompilasi.
 	if !st.IsGitRepo && goTersedia() {
-		sendTelegram(chatID, "⚠️ <b>Update tidak tersedia.</b>\n\n"+
+		tg.SendTelegram(chatID, "⚠️ <b>Update tidak tersedia.</b>\n\n"+
 			"Bot ini bukan hasil <code>git clone</code>, jadi tidak ada sumber untuk ditarik.\n\n"+
-			"Direktori: <code>"+htmlEscapeRingkas(st.Dir, 200)+"</code>\n\n"+
+			"Direktori: <code>"+HtmlEscapeRingkas(st.Dir, 200)+"</code>\n\n"+
 			"Untuk mengaktifkan fitur ini, pasang bot dari repository:\n"+
 			"<code>/term git clone https://github.com/arewedaks/bot-vps-control.git /opt/bot-vps</code>")
 		return
@@ -391,7 +407,7 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 
 	// ---- Belum ada remote git (hanya berlaku bila jalur build dipakai) ----
 	if st.IsGitRepo && st.Remote == "" {
-		sendTelegram(chatID, "⚠️ <b>Tidak ada remote git.</b>\n\n"+
+		tg.SendTelegram(chatID, "⚠️ <b>Tidak ada remote git.</b>\n\n"+
 			"Tambahkan sumber terlebih dahulu:\n"+
 			"<code>/term git remote add origin https://github.com/arewedaks/bot-vps-control.git</code>")
 		return
@@ -416,19 +432,19 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 				pesan += "<b>Versi terbaru:</b>" + versiRingkasUpdate(versiRilis) + "\n\n" +
 					"Ketik <code>/update confirm</code> untuk memasang."
 			}
-			sendTelegram(chatID, pesan)
+			tg.SendTelegram(chatID, pesan)
 			return
 		}
 
 		if arg == "confirm" {
-			sendTelegram(chatID, "🔄 <b>Memulai update...</b>\n\n"+
+			tg.SendTelegram(chatID, "🔄 <b>Memulai update...</b>\n\n"+
 				"Metode: "+metodeUpdate()+"\n"+
 				"Bot tetap melayani sampai tahap terakhir.")
 			sukses, pesan := jalankanUpdateUnduh(st.Dir, func(tahap string) {
-				sendTelegram(chatID, tahap)
+				tg.SendTelegram(chatID, tahap)
 			})
 			_ = sukses
-			sendTelegram(chatID, pesan)
+			tg.SendTelegram(chatID, pesan)
 			return
 		}
 
@@ -436,24 +452,24 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 			"━━━━━━━━━━━━━━━━━━━━\n" +
 			"Bot ini dipasang dari binary, bukan <code>git clone</code> — jadi update " +
 			"diambil langsung dari GitHub Releases. Tidak perlu git.\n\n" +
-			"<b>Direktori:</b> <code>" + htmlEscapeRingkas(st.Dir, 200) + "</code>\n" +
+			"<b>Direktori:</b> <code>" + HtmlEscapeRingkas(st.Dir, 200) + "</code>\n" +
 			"<b>Metode:</b> " + metodeUpdate() + "\n"
 		if versiRilis != "" {
 			pesan += "<b>Versi terbaru:</b>" + versiRingkasUpdate(versiRilis) + "\n"
 		}
 		pesan += "\n<i>Bila gagal, binary lama tetap dipakai.</i>\n\n" +
 			"Ketik <code>/update confirm</code> untuk melanjutkan."
-		sendTelegram(chatID, pesan)
+		tg.SendTelegram(chatID, pesan)
 		return
 	}
 
 	// ---- Perubahan lokal akan menghambat pull ----
 	if st.Dirty && arg != "cek" {
-		sendTelegram(chatID, "⚠️ <b>Ada perubahan lokal yang belum di-commit.</b>\n\n"+
+		tg.SendTelegram(chatID, "⚠️ <b>Ada perubahan lokal yang belum di-commit.</b>\n\n"+
 			"Agar tidak ada pekerjaan yang hilang, bot tidak melanjutkan.\n\n"+
-			"<b>Cabang:</b> <code>"+htmlEscapeRingkas(st.Branch, 60)+"</code>\n"+
-			"<b>Commit:</b> <code>"+htmlEscapeRingkas(st.Commit, 20)+"</code>\n"+
-			"<b>Remote:</b> <code>"+htmlEscapeRingkas(st.Remote, 120)+"</code>\n\n"+
+			"<b>Cabang:</b> <code>"+HtmlEscapeRingkas(st.Branch, 60)+"</code>\n"+
+			"<b>Commit:</b> <code>"+HtmlEscapeRingkas(st.Commit, 20)+"</code>\n"+
+			"<b>Remote:</b> <code>"+HtmlEscapeRingkas(st.Remote, 120)+"</code>\n\n"+
 			"Pilih salah satu:\n"+
 			"• <code>/term git stash</code> — simpan sementara\n"+
 			"• <code>/term git diff</code> — lihat perubahannya\n"+
@@ -464,18 +480,18 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 	// ---- Periksa ketersediaan versi baru ----
 	ada, lokal, jauh, err := updateTersedia()
 	if err != nil {
-		sendTelegram(chatID, "❌ <b>Gagal memeriksa update.</b>\n<pre>"+
-			htmlEscapeRingkas(err.Error(), 400)+"</pre>\n\n"+
+		tg.SendTelegram(chatID, "❌ <b>Gagal memeriksa update.</b>\n<pre>"+
+			HtmlEscapeRingkas(err.Error(), 400)+"</pre>\n\n"+
 			"Pastikan VPS bisa menjangkau GitHub:\n<code>/term git fetch origin</code>")
 		return
 	}
 
 	if !ada {
-		sendTelegram(chatID, "✅ <b>Bot sudah versi terbaru.</b>\n\n"+
-			"<b>Cabang:</b> <code>"+htmlEscapeRingkas(st.Branch, 60)+"</code>\n"+
-			"<b>Commit:</b> <code>"+htmlEscapeRingkas(st.Commit, 20)+"</code>\n"+
-			"<b>Pesan:</b> "+htmlEscapeRingkas(st.Subject, 120)+"\n\n"+
-			"Tidak ada perubahan baru di <code>"+htmlEscapeRingkas(st.Remote, 100)+"</code>.")
+		tg.SendTelegram(chatID, "✅ <b>Bot sudah versi terbaru.</b>\n\n"+
+			"<b>Cabang:</b> <code>"+HtmlEscapeRingkas(st.Branch, 60)+"</code>\n"+
+			"<b>Commit:</b> <code>"+HtmlEscapeRingkas(st.Commit, 20)+"</code>\n"+
+			"<b>Pesan:</b> "+HtmlEscapeRingkas(st.Subject, 120)+"\n\n"+
+			"Tidak ada perubahan baru di <code>"+HtmlEscapeRingkas(st.Remote, 100)+"</code>.")
 		return
 	}
 
@@ -485,40 +501,40 @@ func handleUpdateCommand(chatID int64, userID int64, rawText string) {
 	metode := metodeUpdate()
 
 	if arg == "cek" {
-		sendTelegram(chatID, "🔍 <b>Update tersedia</b> ("+
+		tg.SendTelegram(chatID, "🔍 <b>Update tersedia</b> ("+
 			fmt.Sprintf("%d", tertinggal)+" commit baru)\n\n"+
-			"<b>Versi sekarang:</b> <code>"+htmlEscapeRingkas(lokal[:minInt(7, len(lokal))], 20)+"</code>\n"+
-			"<b>Versi terbaru:</b> <code>"+htmlEscapeRingkas(jauh[:minInt(7, len(jauh))], 20)+"</code>\n"+
+			"<b>Versi sekarang:</b> <code>"+HtmlEscapeRingkas(lokal[:minInt(7, len(lokal))], 20)+"</code>\n"+
+			"<b>Versi terbaru:</b> <code>"+HtmlEscapeRingkas(jauh[:minInt(7, len(jauh))], 20)+"</code>\n"+
 			"<b>Metode:</b> "+metode+"\n\n"+
-			"<b>Perubahan:</b>\n<pre>"+htmlEscapeRingkas(ringkas, 900)+"</pre>\n\n"+
+			"<b>Perubahan:</b>\n<pre>"+HtmlEscapeRingkas(ringkas, 900)+"</pre>\n\n"+
 			"Jalankan <code>/update confirm</code> untuk memasang.")
 		return
 	}
 
 	// ---- Mode konfirmasi: benar-benar update ----
 	if arg == "confirm" {
-		sendTelegram(chatID, "🔄 <b>Memulai update...</b>\n\n"+
+		tg.SendTelegram(chatID, "🔄 <b>Memulai update...</b>\n\n"+
 			fmt.Sprintf("Memasang %d commit baru.\n", tertinggal)+
 			"Metode: "+metode+"\n"+
 			"Bot tetap melayani sampai tahap terakhir.")
 
 		sukses, pesan := jalankanUpdateTerpilih(metode, func(tahap string) {
-			sendTelegram(chatID, tahap)
+			tg.SendTelegram(chatID, tahap)
 		})
 		_ = sukses
-		sendTelegram(chatID, pesan)
+		tg.SendTelegram(chatID, pesan)
 		return
 	}
 
 	// ---- Tanpa argumen: tampilkan ringkasan + minta konfirmasi ----
-	sendTelegram(chatID, "🔄 <b>Update Bot</b>\n"+
+	tg.SendTelegram(chatID, "🔄 <b>Update Bot</b>\n"+
 		"━━━━━━━━━━━━━━━━━━━━\n"+
-		"<b>Cabang:</b> <code>"+htmlEscapeRingkas(st.Branch, 60)+"</code>\n"+
-		"<b>Versi sekarang:</b> <code>"+htmlEscapeRingkas(lokal[:minInt(7, len(lokal))], 20)+"</code>\n"+
-		"<b>Versi terbaru:</b> <code>"+htmlEscapeRingkas(jauh[:minInt(7, len(jauh))], 20)+"</code>\n"+
+		"<b>Cabang:</b> <code>"+HtmlEscapeRingkas(st.Branch, 60)+"</code>\n"+
+		"<b>Versi sekarang:</b> <code>"+HtmlEscapeRingkas(lokal[:minInt(7, len(lokal))], 20)+"</code>\n"+
+		"<b>Versi terbaru:</b> <code>"+HtmlEscapeRingkas(jauh[:minInt(7, len(jauh))], 20)+"</code>\n"+
 		"<b>Commit baru:</b> "+fmt.Sprintf("%d", tertinggal)+"\n"+
 		"<b>Metode:</b> "+metode+"\n\n"+
-		"<b>Perubahan:</b>\n<pre>"+htmlEscapeRingkas(ringkas, 700)+"</pre>\n\n"+
+		"<b>Perubahan:</b>\n<pre>"+HtmlEscapeRingkas(ringkas, 700)+"</pre>\n\n"+
 		"<i>Bot akan menarik kode, memasang versi baru, lalu restart sendiri.\n"+
 		"Bila gagal, bot tetap hidup dengan versi lama.</i>\n\n"+
 		"Ketik <code>/update confirm</code> untuk melanjutkan.")
@@ -555,7 +571,7 @@ func metodeUpdate() string {
 		return "🔨 kompilasi di VPS (Go terdeteksi)"
 	default:
 		return "⬇️ unduh biner jadi (<code>linux/" +
-			htmlEscapeRingkas(namaArsitekturRilis(runtime.GOARCH), 20) +
+			HtmlEscapeRingkas(namaArsitekturRilis(runtime.GOARCH), 20) +
 			"</code>, tanpa kompilasi)"
 	}
 }

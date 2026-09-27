@@ -1,9 +1,10 @@
-package main
+package update
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,10 +49,10 @@ func TestBotTanpaGitTetapBisaUpdate(t *testing.T) {
 
 	// Penolakan hanya boleh muncul bila Go ADA (artinya masih bisa build
 	// setelah clone, jadi sarannya masuk akal).
-	if !contains(isi, "if !st.IsGitRepo && goTersedia()") {
+	if !strings.Contains(isi, "if !st.IsGitRepo && goTersedia()") {
 		t.Error("❌ penolakan bot-tanpa-git tidak dibatasi pada mesin yang punya Go")
 	}
-	if !contains(isi, "jalankanUpdateUnduh(st.Dir") {
+	if !strings.Contains(isi, "jalankanUpdateUnduh(st.Dir") {
 		t.Error("❌ handler tidak memakai jalur unduh untuk bot tanpa git")
 	}
 

@@ -24,6 +24,7 @@ package main
 //   dp:setent:<nama> → mulai mode tentukan entry point
 
 import (
+	"bot-vps-control/internal/update"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -102,7 +103,7 @@ func menuDeployUtama(userID int64) (string, *InlineKeyboardMarkup) {
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		fmt.Sprintf("📦 <code>Proyek    : %d</code>\n", len(proyek)) +
 		fmt.Sprintf("🟢 <code>Berjalan  : %d</code>\n", jalan) +
-		fmt.Sprintf("📁 <code>Lokasi    : %s</code>\n", htmlEscapeRingkas(htmlEscapeDir(userID), 60)) +
+		fmt.Sprintf("📁 <code>Lokasi    : %s</code>\n", update.HtmlEscapeRingkas(htmlEscapeDir(userID), 60)) +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"<i>Deploy bot baru per-proyek, kelola terpisah dari bot utama.</i>"
 
@@ -213,7 +214,7 @@ func daftarProyekPanel(userID int64, halaman int) (string, *InlineKeyboardMarkup
 		label := labelBahasa(bahasa)
 
 		fmt.Fprintf(&b, "%s <code>%s</code>\n└─➤ <i>%s</i>\n",
-			ikon, htmlEscapeRingkas(nama, 32), htmlEscapeRingkas(label, 20))
+			ikon, update.HtmlEscapeRingkas(nama, 32), update.HtmlEscapeRingkas(label, 20))
 
 		baris = append(baris, []InlineKeyboardButton{{
 			Text:         ikon + " " + nama,
@@ -258,10 +259,10 @@ func panelKontrolDeploy(userID int64, nama string) (string, *InlineKeyboardMarku
 	teks := "━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"        🛠️ <b>KONTROL PROYEK</b> 🛠️\n" +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-		fmt.Sprintf("📦 <code>Proyek   : %s</code>\n", htmlEscapeRingkas(nama, 40)) +
+		fmt.Sprintf("📦 <code>Proyek   : %s</code>\n", update.HtmlEscapeRingkas(nama, 40)) +
 		fmt.Sprintf("%s <code>Status   : %s</code>\n", ikon, statusDeploy(st)) +
-		fmt.Sprintf("🔤 <code>Bahasa   : %s</code>\n", htmlEscapeRingkas(labelBahasa(bahasa), 30)) +
-		fmt.Sprintf("▶️ <code>Entry    : %s</code>\n", htmlEscapeRingkas(entryTampil, 40)) +
+		fmt.Sprintf("🔤 <code>Bahasa   : %s</code>\n", update.HtmlEscapeRingkas(labelBahasa(bahasa), 30)) +
+		fmt.Sprintf("▶️ <code>Entry    : %s</code>\n", update.HtmlEscapeRingkas(entryTampil, 40)) +
 		fmt.Sprintf("⏱ <code>Uptime   : %s</code>\n", st.Uptime) +
 		fmt.Sprintf("💾 <code>RAM      : %s</code>\n", st.RAM) +
 		fmt.Sprintf("⚙️ <code>CPU      : %s</code>\n", st.CPU) +
@@ -321,7 +322,7 @@ func panelPilihBahasa(userID int64, nama string) (string, *InlineKeyboardMarkup)
 	teks := "━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"        🔤 <b>PILIH BAHASA</b> 🔤\n" +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-		fmt.Sprintf("📦 <code>Proyek : %s</code>\n", htmlEscapeRingkas(nama, 40)) +
+		fmt.Sprintf("📦 <code>Proyek : %s</code>\n", update.HtmlEscapeRingkas(nama, 40)) +
 		fmt.Sprintf("🔍 <code>Terdeteksi : %s %s</code>\n", labelBahasa(sekarang), ket) +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"<i>Tentukan manual bila deteksi otomatis keliru.</i>"
@@ -363,9 +364,9 @@ func panelPilihEntry(userID int64, nama string) (string, *InlineKeyboardMarkup) 
 	b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━\n")
 	b.WriteString("      ▶️ <b>PILIH ENTRY POINT</b> ▶️\n")
 	b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Fprintf(&b, "📦 <code>Proyek : %s</code>\n", htmlEscapeRingkas(nama, 40))
-	fmt.Fprintf(&b, "🔤 <code>Bahasa : %s</code>\n", htmlEscapeRingkas(labelBahasa(bahasa), 30))
-	fmt.Fprintf(&b, "▶️ <code>Kini   : %s</code>\n", htmlEscapeRingkas(sekarang, 40))
+	fmt.Fprintf(&b, "📦 <code>Proyek : %s</code>\n", update.HtmlEscapeRingkas(nama, 40))
+	fmt.Fprintf(&b, "🔤 <code>Bahasa : %s</code>\n", update.HtmlEscapeRingkas(labelBahasa(bahasa), 30))
+	fmt.Fprintf(&b, "▶️ <code>Kini   : %s</code>\n", update.HtmlEscapeRingkas(sekarang, 40))
 	b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━\n")
 	b.WriteString("<i>Pilih berkas yang akan dijalankan.</i>")
 
@@ -467,9 +468,9 @@ func laporanHasilDeploy(userID int64, nama string) (string, *InlineKeyboardMarku
 	teks := "━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"      ✅ <b>DEPLOY BERHASIL</b> ✅\n" +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-		fmt.Sprintf("📦 <code>Proyek : %s</code>\n", htmlEscapeRingkas(nama, 40)) +
-		fmt.Sprintf("🔤 <code>Bahasa : %s</code>\n", htmlEscapeRingkas(labelBahasa(bahasa), 30)) +
-		fmt.Sprintf("▶️ <code>Entry  : %s</code>\n", htmlEscapeRingkas(entryTampil, 40)) +
+		fmt.Sprintf("📦 <code>Proyek : %s</code>\n", update.HtmlEscapeRingkas(nama, 40)) +
+		fmt.Sprintf("🔤 <code>Bahasa : %s</code>\n", update.HtmlEscapeRingkas(labelBahasa(bahasa), 30)) +
+		fmt.Sprintf("▶️ <code>Entry  : %s</code>\n", update.HtmlEscapeRingkas(entryTampil, 40)) +
 		fmt.Sprintf("📄 <code>Berkas : %d (%s)</code>\n", jumlah, formatUkuran(ukuran)) +
 		"━━━━━━━━━━━━━━━━━━━━━━━\n" +
 		"<i>Tekan Start untuk menjalankan.</i>"

@@ -1,4 +1,4 @@
-package main
+package update
 
 // ==============================================================================
 // 🧪 TEST FITUR UPDATE
@@ -228,13 +228,13 @@ func TestHtmlEscapeRingkasMelindungiTelegram(t *testing.T) {
 		{"</b><script>", "&lt;/b&gt;&lt;script&gt;"},
 	}
 	for _, k := range kasus {
-		hasil := htmlEscapeRingkas(k.masuk, 500)
+		hasil := HtmlEscapeRingkas(k.masuk, 500)
 		if !strings.Contains(hasil, k.harusAda) {
 			t.Errorf("escape(%q) = %q, harusnya memuat %q", k.masuk, hasil, k.harusAda)
 		}
 	}
 	// Karakter mentah tidak boleh lolos.
-	if strings.Contains(htmlEscapeRingkas("<b>x</b>", 100), "<b>") {
+	if strings.Contains(HtmlEscapeRingkas("<b>x</b>", 100), "<b>") {
 		t.Error("❌ tag HTML mentah lolos — Telegram akan menolak pesan")
 	}
 	t.Log("✅ Keluaran git aman dikirim sebagai HTML")
@@ -245,7 +245,7 @@ func TestHtmlEscapeRingkasMelindungiTelegram(t *testing.T) {
 func TestHtmlEscapeMemberiPenandaPotong(t *testing.T) {
 	panjang := strings.Repeat("x", 5000)
 
-	h := htmlEscapeRingkas(panjang, 100)
+	h := HtmlEscapeRingkas(panjang, 100)
 	if len(h) > 200 {
 		t.Errorf("keluaran tidak dipotong, panjang %d", len(h))
 	}
@@ -358,7 +358,7 @@ func TestHandlerUpdateSemuaArgumenAman(t *testing.T) {
 				}
 			}()
 			// chatID 0 = pengiriman akan gagal diam-diam, tapi logikanya jalan.
-			handleUpdateCommand(0, 0, a)
+			HandleUpdateCommand(0, 0, a)
 		}()
 	}
 	t.Logf("✅ %d bentuk perintah ditangani tanpa panic", len(argumen))
@@ -379,7 +379,7 @@ func TestHandlerUpdateDiLuarRepoAman(t *testing.T) {
 			t.Errorf("❌ panic di luar repo git: %v", r)
 		}
 	}()
-	handleUpdateCommand(0, 0, "/update")
+	HandleUpdateCommand(0, 0, "/update")
 
 	// Direktori tanpa .git harus dikenali sebagai bukan repo.
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
@@ -452,8 +452,8 @@ func TestUpdateTidakPernahMenimpaPerubahanLokal(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("pindah direktori: %v", err)
 	}
-	handleUpdateCommand(0, 0, "/update")
-	handleUpdateCommand(0, 0, "/update confirm")
+	HandleUpdateCommand(0, 0, "/update")
+	HandleUpdateCommand(0, 0, "/update confirm")
 	os.Chdir(lama)
 
 	// JAMINAN: pekerjaan lokal harus utuh.

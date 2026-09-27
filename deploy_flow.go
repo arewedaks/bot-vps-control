@@ -15,6 +15,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bot-vps-control/internal/update"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -94,13 +95,13 @@ func prosesTerimaBerkas(chatID int64, userID int64, doc *Document, pesanID int64
 	if err := os.RemoveAll(dir); err != nil {
 		balasPanel(chatID, pesanID,
 			"❌ Gagal membersihkan direktori proyek:\n<pre>"+
-				htmlEscapeRingkas(err.Error(), 300)+"</pre>", kbKembaliDeploy())
+				update.HtmlEscapeRingkas(err.Error(), 300)+"</pre>", kbKembaliDeploy())
 		return
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		balasPanel(chatID, pesanID,
 			"❌ Gagal membuat direktori proyek:\n<pre>"+
-				htmlEscapeRingkas(err.Error(), 300)+"</pre>", kbKembaliDeploy())
+				update.HtmlEscapeRingkas(err.Error(), 300)+"</pre>", kbKembaliDeploy())
 		return
 	}
 
@@ -116,7 +117,7 @@ func prosesTerimaBerkas(chatID int64, userID int64, doc *Document, pesanID int64
 		os.Remove(tmp)
 		balasPanel(chatID, pesanID,
 			"❌ Gagal mengunduh berkas:\n<pre>"+
-				htmlEscapeRingkas(err.Error(), 300)+"</pre>", kbKembaliDeploy())
+				update.HtmlEscapeRingkas(err.Error(), 300)+"</pre>", kbKembaliDeploy())
 		return
 	}
 
@@ -132,7 +133,7 @@ func prosesTerimaBerkas(chatID int64, userID int64, doc *Document, pesanID int64
 		os.RemoveAll(dir)
 		balasPanel(chatID, pesanID,
 			"❌ <b>Gagal mengurai berkas.</b>\n\n<pre>"+
-				htmlEscapeRingkas(pesanGalat, 500)+"</pre>", kbKembaliDeploy())
+				update.HtmlEscapeRingkas(pesanGalat, 500)+"</pre>", kbKembaliDeploy())
 		return
 	}
 
@@ -571,7 +572,7 @@ func prosesDeployGit(chatID int64, userID int64, repo string, namaProyek string,
 
 	balasPanel(chatID, pesanID,
 		"<b><i>Mengkloning repository:</i></b> ▓▓▓▓▓░░░░░ 40%\n\n"+
-			"<code>"+htmlEscapeRingkas(repo, 120)+"</code>", nil)
+			"<code>"+update.HtmlEscapeRingkas(repo, 120)+"</code>", nil)
 
 	// --depth 1: hanya commit terakhir yang dibutuhkan. Riwayat penuh bisa
 	// berukuran ratusan MB dan tidak ada gunanya untuk deploy.
@@ -671,7 +672,7 @@ func pasangPythonDeploy(dir string) []string {
 				ekor = ekor[len(ekor)-400:]
 			}
 			catatan = append(catatan, "⚠️ Sebagian paket gagal dipasang:\n<pre>"+
-				htmlEscapeRingkas(ekor, 400)+"</pre>")
+				update.HtmlEscapeRingkas(ekor, 400)+"</pre>")
 		}
 		return catatan
 	}
@@ -693,7 +694,7 @@ func pasangPythonDeploy(dir string) []string {
 			ekor = ekor[len(ekor)-400:]
 		}
 		catatan = append(catatan, "⚠️ Sebagian paket gagal dipasang:\n<pre>"+
-			htmlEscapeRingkas(ekor, 400)+"</pre>")
+			update.HtmlEscapeRingkas(ekor, 400)+"</pre>")
 	}
 
 	return catatan
@@ -736,7 +737,7 @@ func pasangNodeDeploy(dir string) []string {
 	if len(ekor) > 400 {
 		ekor = ekor[len(ekor)-400:]
 	}
-	return []string{"⚠️ Pemasangan npm gagal:\n<pre>" + htmlEscapeRingkas(ekor, 400) + "</pre>"}
+	return []string{"⚠️ Pemasangan npm gagal:\n<pre>" + update.HtmlEscapeRingkas(ekor, 400) + "</pre>"}
 }
 
 // bangunGoDeploy mengunduh dependensi Go dan membangun binary.
@@ -761,7 +762,7 @@ func bangunGoDeploy(dir string) []string {
 				ekor = ekor[len(ekor)-300:]
 			}
 			catatan = append(catatan, "⚠️ go mod download bermasalah:\n<pre>"+
-				htmlEscapeRingkas(ekor, 300)+"</pre>")
+				update.HtmlEscapeRingkas(ekor, 300)+"</pre>")
 		}
 	}
 
@@ -777,7 +778,7 @@ func bangunGoDeploy(dir string) []string {
 			ekor = ekor[len(ekor)-400:]
 		}
 		catatan = append(catatan, "⚠️ Build gagal, akan dicoba dengan <code>go run</code>:\n<pre>"+
-			htmlEscapeRingkas(ekor, 400)+"</pre>")
+			update.HtmlEscapeRingkas(ekor, 400)+"</pre>")
 	}
 
 	return catatan
@@ -960,8 +961,8 @@ func balasPanel(chatID int64, pesanID int64, teks string, kb *InlineKeyboardMark
 
 // kirimKesalahanDeploy mengirim laporan kegagalan yang seragam.
 func kirimKesalahanDeploy(chatID int64, pesanID int64, judul string, rincian string) {
-	teks := "❌ <b>" + htmlEscapeRingkas(judul, 100) + "</b>\n\n<pre>" +
-		htmlEscapeRingkas(rincian, 800) + "</pre>"
+	teks := "❌ <b>" + update.HtmlEscapeRingkas(judul, 100) + "</b>\n\n<pre>" +
+		update.HtmlEscapeRingkas(rincian, 800) + "</pre>"
 	balasPanel(chatID, pesanID, teks, kbKembaliDeploy())
 }
 
@@ -1007,7 +1008,7 @@ func DeployMenerimaTeks(chatID int64, userID int64, teks string) bool {
 		entry := strings.TrimSpace(teks)
 		if _, err := os.Stat(filepath.Join(dir, entry)); err != nil {
 			balasPanel(chatID, langkah.Pesan,
-				"❌ Berkas <code>"+htmlEscapeRingkas(entry, 80)+"</code> tidak ada.\n\n"+
+				"❌ Berkas <code>"+update.HtmlEscapeRingkas(entry, 80)+"</code> tidak ada.\n\n"+
 					"Tulis nama berkasnya persis seperti yang terlihat di daftar.",
 				kbKembaliKontrol(nama))
 			return true
@@ -1016,7 +1017,7 @@ func DeployMenerimaTeks(chatID int64, userID int64, teks string) bool {
 		tulisPenanda(dir, penandaEntryDeploy, entry)
 
 		balasPanel(chatID, langkah.Pesan,
-			"✅ Entry point disetel ke <code>"+htmlEscapeRingkas(entry, 80)+"</code>.",
+			"✅ Entry point disetel ke <code>"+update.HtmlEscapeRingkas(entry, 80)+"</code>.",
 			kbKembaliKontrol(nama))
 		return true
 	}
@@ -1158,10 +1159,10 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		teks := "━━━━━━━━━━━━━━━━━━━━━━━\n" +
 			"        📜 <b>LOG PROYEK</b> 📜\n" +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-			fmt.Sprintf("📦 <code>%s</code>\n", htmlEscapeRingkas(nama, 40)) +
+			fmt.Sprintf("📦 <code>%s</code>\n", update.HtmlEscapeRingkas(nama, 40)) +
 			fmt.Sprintf("🕐 <code>%s</code>\n", waktuSekarang()) +
 			"━━━━━━━━━━━━━━━━━━━━━━━\n" +
-			"<pre>" + htmlEscapeRingkas(isi, 2600) + "</pre>"
+			"<pre>" + update.HtmlEscapeRingkas(isi, 2600) + "</pre>"
 
 		kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
 			{
@@ -1284,7 +1285,7 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		setPanelMessage(userID, chatID, pesanID)
 		editTelegramMessage(chatID, pesanID,
 			"⚠️ <b>KONFIRMASI HAPUS</b> ⚠️\n\n"+
-				"Proyek <code>"+htmlEscapeRingkas(nama, 40)+"</code> akan dihapus\n"+
+				"Proyek <code>"+update.HtmlEscapeRingkas(nama, 40)+"</code> akan dihapus\n"+
 				"beserta seluruh berkasnya.\n\n"+
 				"<i>Tindakan ini tidak bisa dibatalkan.</i>", kb)
 		return true

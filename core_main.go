@@ -1408,6 +1408,28 @@ func main() {
 					continue
 				}
 
+				if strings.HasPrefix(data, "bersih:") {
+					action := strings.TrimPrefix(data, "bersih:")
+					answerCallbackQuery(cb.ID, "")
+					if action == "batal" {
+						editTelegramMessage(chatID, msgID, "❌ Batal. Tidak ada yang dihapus.", nil)
+						continue
+					}
+					if action != "ya" {
+						continue
+					}
+					nProyek := deploy.BersihkanSemuaProyek(userID)
+					nPesan := tg.BersihkanChat(chatID)
+					// Lapor lewat pesan baru: panel yang lama barusan ikut terhapus.
+					sendTelegram(chatID, fmt.Sprintf(
+						"🧹 <b>Selesai.</b>\n\n"+
+							"• %d proyek dihapus beserta log, pid, dan berkas /tmp-nya\n"+
+							"• %d pesan bot dihapus dari chat ini\n\n"+
+							"<i>Chat bersih. Pesan perintah Anda tidak disentuh.</i>",
+						nProyek, nPesan))
+					continue
+				}
+
 				if strings.HasPrefix(data, "ts:") {
 					action := strings.TrimPrefix(data, "ts:")
 					// Panel Tailscale dicatat supaya menu berikutnya menulis ke pesan yang sama.
@@ -1895,6 +1917,22 @@ func main() {
 
 			case "/update", "/upgrade":
 				update.HandleUpdateCommand(chatID, userID, rawText)
+
+			case "/bersih":
+				teks := "🧹 <b>KONFIRMASI BERSIH CHAT</b>\n\n" +
+					"Yang dihapus:\n" +
+					"• Semua proyek deploy beserta proses berjalannya\n" +
+					"• Berkas /tmp: log, pid, penanda waktu\n" +
+					"• Pesan-pesan yang dikirim bot ke chat ini\n\n" +
+					"<i>Pesan perintah Anda tidak disentuh.</i>\n\n" +
+					"<i>Tindakan ini tidak bisa dibatalkan.</i>"
+				kb := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
+					{
+						{Text: "🧹 YA, Bersih Sekarang!", CallbackData: "bersih:ya"},
+						{Text: "❌ Batal", CallbackData: "bersih:batal"},
+					},
+				}}
+				updatePanel(userID, chatID, teks, kb)
 
 			case "/unduh", "/wget", "/download-url":
 				handleUnduhURL(chatID, userID, rawText)

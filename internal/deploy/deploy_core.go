@@ -499,6 +499,32 @@ func bersihkanBerkasProsesDeploy(scr string) {
 	os.Remove(berkasWaktuDeploy(scr))
 }
 
+// bersihkanBerkasProsesLengkap menghapus pid, penanda waktu, DAN log.
+// Hapus proyek (del2) cuma memotong log; berkas log yang memang sudah tamat
+// lebih baik dihapus supaya /tmp tidak menumpuk berkas berumur panjang.
+func bersihkanBerkasProsesLengkap(scr string) {
+	bersihkanBerkasProsesDeploy(scr)
+	os.Remove(berkasLogDeploy(scr))
+}
+
+// BersihkanSemuaProyek menghentikan seluruh proyek pengguna, menghapus
+// foldernya, dan berkas /tmp miliknya. Dipakai lewat /bersih.
+// Kembalikan jumlah proyek yang dihapus.
+func BersihkanSemuaProyek(userID int64) int {
+	dir, err := dirDeployPengguna(userID)
+	if err != nil {
+		return 0
+	}
+	proyek := daftarProyekDeploy(userID)
+	for _, nama := range proyek {
+		scr := namaProsesDeploy(userID, nama)
+		matikanProsesDeploy(scr)
+		bersihkanBerkasProsesLengkap(scr)
+		os.RemoveAll(filepath.Join(dir, nama))
+	}
+	return len(proyek)
+}
+
 // prosesAktifDeploy mengembalikan nama proyek pengguna yang prosesnya hidup.
 func prosesAktifDeploy(userID int64) map[string]bool {
 	aktif := map[string]bool{}

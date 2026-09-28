@@ -1309,6 +1309,34 @@ func DeployTanganiCallback(userID int64, chatID int64, pesanID int64, data strin
 		tg.SetPanelMessage(userID, chatID, pesanID)
 		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
 		return true
+
+	case "clean": // Konfirmasi bersih SEMUA proyek + berkas proses
+		proyek := daftarProyekDeploy(userID)
+		kb := &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
+			{
+				{Text: "🧹 Ya, Bersih Semua", CallbackData: "dp:clean2"},
+				{Text: "❌ Batal", CallbackData: "dp:l"},
+			},
+		}}
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID,
+			fmt.Sprintf("⚠️ <b>KONFIRMASI BERSIH SEMUA</b> ⚠️\n\n"+
+				"%d proyek akan DIHENTIKAN dan DIHAPUS beserta log, pid,\n"+
+				"dan berkas /tmp miliknya.\n\n"+
+				"<i>Tindakan ini tidak bisa dibatalkan.</i>", len(proyek)), kb)
+		return true
+
+	case "clean2": // Bersih sungguhan semua proyek pengguna
+		n := BersihkanSemuaProyek(userID)
+		teks, kb := daftarProyekPanel(userID, 0)
+		if n == 0 {
+			teks = "🧹 <b>Tidak ada proyek yang bisa dihapus.</b>\n\n" + teks
+		} else {
+			teks = fmt.Sprintf("🧹 <b>%d proyek dihapus.</b>\n\n", n) + teks
+		}
+		tg.SetPanelMessage(userID, chatID, pesanID)
+		tg.EditTelegramMessage(chatID, pesanID, teks, kb)
+		return true
 	}
 
 	return false

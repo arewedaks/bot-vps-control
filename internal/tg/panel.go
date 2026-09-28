@@ -24,6 +24,12 @@ type panelState struct {
 var (
 	panelMu     sync.Mutex
 	panelByUser = make(map[int64]*panelState)
+
+	// pesanBotMu & pesanBot melacak ID pesan yang dikirim bot per chat,
+	// supaya /bersih bisa menghapusnya. Batas 40 per chat: lama dibuang,
+	// dan Telegram sendiri membatasi deleteMessage untuk pesan < 48 jam.
+	pesanBotMu sync.Mutex
+	pesanBot   = make(map[int64][]int64)
 )
 
 // setPanelMessage mencatat pesan mana yang dipakai sebagai panel untuk admin.
@@ -42,6 +48,36 @@ func GetPanelMessage(userID int64) (int64, int64, bool) {
 		return 0, 0, false
 	}
 	return p.MessageID, p.ChatID, true
+}
+
+// catatPesanBot mengingat ID pesan yang bot kirim ke suatu chat.
+func catatPesanBot(chatID, msgID int64) {
+	pesanBotMu.Lock()
+	batal := pesanBot[chatID]
+	batal = append(batal, msgID)
+	if len(batal) > 40 { // buang yang paling tua
+		batal = batal[len(batal)-40:]
+	}
+	pesanBot[chatID] = batal
+	pesanBotMu.Unlock()
+}
+
+// BersihkanChat menghapus panel aktif dan pesan-pesan yang pernah dikirim
+// bot ke chat itu, lalu melupakan semuanya. Dipanggil lewat /bersih.
+// Pesan milik pengguna (perintah, dokumen yang dikirim) TIDAK disentuh —
+// menghapus itu berarti menghapus riwayat percakapan penggunanya sendiri.
+func BersihkanChat(chatID int64) int {
+	hapus := 0
+	// Panel aktif dulu — ia juga tercatat lewat sendPanel.
+	pesanBotMu.Lock()
+	daftar := pesanBot[chatID]
+	delete(pesanBot, chatID)
+	pesanBotMu.Unlock()
+	for _, id := range daftar {
+		DeleteTelegramMessage(chatID, id)
+		hapus++
+	}
+	return hapus
 }
 
 // sendPanel mengirim panel BARU dan mengingatnya. Dipakai saat belum ada panel.

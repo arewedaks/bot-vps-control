@@ -184,7 +184,6 @@ func daftarProyekPanel(userID int64, halaman int) (string, *tg.InlineKeyboardMar
 		}}
 		return teks, kb
 	}
-
 	totalHalaman := (len(proyek) + perHalamanDeploy - 1) / perHalamanDeploy
 	if halaman < 0 {
 		halaman = 0
@@ -237,6 +236,9 @@ func daftarProyekPanel(userID int64, halaman int) (string, *tg.InlineKeyboardMar
 			Text: "➡️", CallbackData: fmt.Sprintf("dp:l:%d", halaman+1)})
 	}
 	baris = append(baris, nav)
+	baris = append(baris, []tg.InlineKeyboardButton{
+		{Text: "🧹 Bersih Semua", CallbackData: "dp:clean"},
+	})
 
 	return b.String(), &tg.InlineKeyboardMarkup{InlineKeyboard: baris}
 }

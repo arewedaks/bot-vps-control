@@ -855,7 +855,8 @@ func HelpText() string {
 		" <code>cd /var</code>, <code>ls -la</code>, <code>top</code>\n\n" +
 		"📁 <b>File Manager</b>\n" +
 		"• <code>/fm [path]</code> — jelajah file (tombol interaktif)\n" +
-		"• <code>/rm &lt;path&gt;</code> — hapus file/folder\n\n" +
+		"• <code>/rm &lt;path&gt;</code> — hapus file/folder\n" +
+		"• <code>/bersih</code> — bersihkan chat & proyek\n\n" +
 		"📊 <b>Monitor Server</b>\n" +
 		"• <code>/stats</code> — CPU, RAM, Disk, Uptime\n" +
 		"• <code>/top</code> — 10 proses terberat\n" +
@@ -931,6 +932,7 @@ func CommandsPlainText() string {
 		"<code>/cat &lt;path&gt;</code> — lihat isi file teks\n" +
 		"<code>/mkdir &lt;path&gt;</code> — buat folder\n" +
 		"<code>/rm &lt;path&gt;</code> — hapus file/folder\n" +
+		"<code>/bersih</code> — hapus semua proyek + log/pid + pesan bot\n" +
 		"<code>/getfile &lt;path&gt;</code> — unduh file ke chat\n" +
 		"<i>Upload: kirim file + caption berisi path tujuan</i>\n\n" +
 		"📊 <b>Monitor</b>\n" +

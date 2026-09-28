@@ -171,6 +171,12 @@ func SendSingleMessage(chatID int64, textHTML string, keyboard *InlineKeyboardMa
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 600))
 		fmt.Printf("⚠️ Telegram menolak pesan (chat %d, status %d): %s\n",
 			chatID, resp.StatusCode, strings.TrimSpace(string(body)))
+		return
+	}
+	// Catat ID pesan yang baru dikirim supaya bisa dihapus lewat /bersih.
+	// Tanpa ini, bot tidak tahu pesan mana yang pernah ia buat.
+	if id := ExtractMessageID(resp); id > 0 {
+		catatPesanBot(chatID, id)
 	}
 }
 

@@ -4,18 +4,29 @@ Documentation=https://github.com/arewedaks/bot-vps-control
 After=network-online.target
 Wants=network-online.target
 
+# Jangan pernah jalankan dua instance dengan token yang sama —
+# mereka akan berebut update Telegram lewat long polling.
+# (StartLimit* milik [Unit], bukan [Service].)
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
 [Service]
 Type=simple
 
-# Sesuaikan tiga baris ini dengan lokasi instalasi kamu.
 # User=root memberi akses penuh (apt, file manager, reboot).
 # Bila tidak ingin root, ganti ke user lain dan pastikan punya sudo.
 User=root
 Group=root
-WorkingDirectory=/root/bot-vps-control
 
-# Bot membaca .env dari WorkingDirectory.
-ExecStart=/root/bot-vps-control/core_engine
+# Binary dan konfigurasi diletakkan install.sh:
+#   binary : /usr/local/bin/core_engine   (ubah lewat INSTALL_DIR)
+#   env    : /etc/bot-vps.env             (isi BOT_TOKEN, ADMIN_IDS)
+# WorkingDirectory menjadi tempat berkas kerja bot (log deploy, berkas
+# sementara), bukan tempat .env — env dibaca lewat EnvironmentFile.
+WorkingDirectory=/var/lib/bot-vps-control
+
+EnvironmentFile=/etc/bot-vps.env
+ExecStart=/usr/local/bin/core_engine
 
 # Selalu hidupkan kembali bila mati. Bot menangani error jaringan sendiri,
 # jadi restart hanya terjadi pada kegagalan tak terduga.
@@ -30,11 +41,6 @@ TimeoutStopSec=20
 
 # Batas file descriptor. Bot mengelola banyak PTY dan socket.
 LimitNOFILE=65535
-
-# Jangan pernah jalankan dua instance dengan token yang sama —
-# mereka akan berebut update Telegram lewat long polling.
-StartLimitBurst=3
-StartLimitIntervalSec=60
 
 # Pengerasan dasar. Bot butuh akses tulis ke seluruh VPS, jadi tidak bisa
 # dikurung penuh — tapi setelan ini tetap membatasi kerusakan.

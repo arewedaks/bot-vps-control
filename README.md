@@ -79,6 +79,27 @@ Shell **persisten** dengan TTY asli — bukan sekadar eksekusi perintah sekali j
 
 ## 🚀 Mulai Cepat
 
+### Instalasi satu baris (VPS produksi — disarankan)
+
+```bash
+sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU sh -c "$(curl -fsSL https://raw.githubusercontent.com/arewedaks/bot-vps-control/master/install.sh)"
+```
+
+Satu baris ini mengunduh binary, memverifikasi checksum, memasang service
+systemd, mengisi konfigurasi dari env var, dan langsung menghidupkan bot.
+Ganti `TOKENMU` dengan token dari @BotFather dan `USERIDMU` dengan User ID
+Telegram kamu (cek lewat @userinfobot).
+
+Bila ingin mengisi token belakangan (tanpa env var), jalankan tanpa env:
+
+```bash
+sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/arewedaks/bot-vps-control/master/install.sh)"
+nano /etc/bot-vps.env                 # isi BOT_TOKEN dan ADMIN_IDS
+sudo systemctl enable --now bot-vps
+```
+
+### Dari source (untuk pengembangan)
+
 ```bash
 # 1. Clone
 git clone https://github.com/arewedaks/bot-vps-control.git

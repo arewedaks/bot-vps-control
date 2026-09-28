@@ -66,17 +66,30 @@ log "✅ Terpasang: ${DEST}/${BIN}"
 # lingkungan kontainer yang tidak punya systemd.
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
     log "🔧 Menyiapkan service systemd..."
+    install -d -m 0755 /var/lib/bot-vps-control
     curl -fsSL -o /etc/systemd/system/bot-vps.service \
         "https://raw.githubusercontent.com/${REPO}/master/bot-vps.service" \
         || log "⚠️  Gagal mengunduh bot-vps.service — lewati (sudah ada unit sistem?)"
 
+    # Konfigurasi bisa dikirim langsung lewat env var, supaya satu baris
+    # instalasi langsung menghidupkan bot tanpa edit manual:
+    #   sudo env BOT_TOKEN=... ADMIN_IDS=... sh -c "$(curl -fsSL ...)"
+    # Tanpa keduanya, /etc/bot-vps.env dibuat kosong sebagai templat.
     if [ ! -f /etc/bot-vps.env ]; then
+        : > /etc/bot-vps.env
+        chmod 600 /etc/bot-vps.env
+        [ -n "${BOT_TOKEN:-}" ] && printf 'BOT_TOKEN=%s\n' "$BOT_TOKEN" >> /etc/bot-vps.env
+        [ -n "${ADMIN_IDS:-}" ] && printf 'ADMIN_IDS=%s\n' "$ADMIN_IDS" >> /etc/bot-vps.env
+        [ -n "${DEPLOY_DIR:-}" ] && printf 'DEPLOY_DIR=%s\n' "$DEPLOY_DIR" >> /etc/bot-vps.env
+    fi
+
+    if ! grep -q '^BOT_TOKEN=' /etc/bot-vps.env; then
         log ""
-        log "⚠️  /etc/bot-vps.env belum ada. Buat dulu, lalu jalankan:"
-        log "      nano /etc/bot-vps.env"
-        log "      (isi: BOT_TOKEN, ADMIN_IDS, DEPLOY_DIR — lihat .env.example)"
+        log "⚠️  BOT_TOKEN belum terisi. Lengkapi lalu hidupkan:"
+        log "      nano /etc/bot-vps.env        # isi BOT_TOKEN dan ADMIN_IDS"
+        log "      systemctl enable --now bot-vps"
         log ""
-        log "Lokasi proyek akan dipakai: \${DEPLOY_DIR:-~/.local/share/deploy-bot}"
+        log "Lokasi proyek akan dipakai: \${DEPLOY_DIR:-/var/lib/bot-vps-control/berkas}"
     else
         systemctl daemon-reload
         systemctl enable --now bot-vps

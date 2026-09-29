@@ -45,7 +45,7 @@ import (
 // ponytail: masih di-hardcode. Kalau nanti ada CI yang meng-*inject* nomor ini
 // lewat -ldflags -X, konstanta ini pindah ke sana — jangan tambah konfigurasi
 // manual sebelum itu benar-benar ada.
-const Versi = "v1.1.3"
+const Versi = "v1.1.4"
 
 var (
 	BotToken string

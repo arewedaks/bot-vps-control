@@ -69,14 +69,22 @@ jobs:
           files: |
             dist/core_engine-linux-*
             dist/SHA256SUMS
-          generate_release_notes: true
+          # Catatan rilis diambil dari pesan tag (git tag -a), bukan ditulis
+          # ulang di sini. Body statis pernah menimpa catatan fitur dari tag,
+          # sehingga halaman rilis hanya menampilkan cara pasang dan tidak
+          # menyebut apa yang berubah. generate_release_notes pun dimatikan:
+          # daftar commit otomatis tidak boleh menggantikan catatan yang sudah
+          # disusun di tag.
           body: |
-            Binary siap pakai untuk bot-vps-control.
+            ${{ github.event.release.body }}
 
-            Pasang di VPS tanpa perlu Go toolchain:
+            ---
+
+            ## Pemasangan
 
             ```sh
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | sh
+            sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU \
+              sh -c "$(curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh)"
             ```
 
             Atau update dari dalam bot Telegram: `/update`

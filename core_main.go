@@ -1505,6 +1505,21 @@ func main() {
 					action := strings.TrimPrefix(data, "tm:")
 					// Pesan yang dipakai tombol ini adalah panel aktif untuk admin.
 					setPanelMessage(userID, chatID, msgID)
+
+					// Tombol kunci mentah: urutan ANSI dikirim apa adanya ke PTY.
+					// Newline sengaja tidak ditambahkan — tombol ini mengedit
+					// baris perintah yang sedang aktif, bukan menjalankannya.
+					if seq, ok := term.KeySeq(action); ok {
+						if err := term.SendRawKey(userID, seq); err != nil {
+							answerCallbackQuery(cb.ID, "⚠️ "+err.Error())
+						} else {
+							answerCallbackQuery(cb.ID, "")
+							text, kb := term.RenderTerminal(userID)
+							editTelegramMessage(chatID, msgID, text, kb)
+						}
+						continue
+					}
+
 					switch action {
 					case "r": // Refresh layar
 						text, kb := term.RenderTerminal(userID)

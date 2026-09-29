@@ -503,6 +503,62 @@ func ReapIdleSessions() {
 // ==============================================================================
 
 // SendToTerminal menyuntik teks ke stdin shell yang sedang hidup.
+// KeySeq memetakan callback tombol terminal ke urutan kunci ANSI yang
+// ditulis apa adanya ke PTY.
+//
+// Newline SENGAJA tidak ikut: tombol ini mengedit baris perintah yang sedang
+// aktif (pindah kursor, riwayat, pelengkapan), bukan menjalankannya.
+//
+// Batas yang perlu diketahui: ini mengendalikan shell readline — riwayat,
+// gerak kursor, Tab, Esc. TUI layar penuh (nano, top, htop) tetap butuh
+// terminal sungguhan: ReadScreen membuang escape sequence dan tampilan
+// dipotong 3400 karakter di Telegram.
+func KeySeq(action string) (string, bool) {
+	seq, ok := keySeqs[action]
+	return seq, ok
+}
+
+var keySeqs = map[string]string{
+	"u":    "\x1b[A", // panah atas — riwayat sebelumnya
+	"d":    "\x1b[B", // panah bawah
+	"rt":   "\x1b[C", // panah kanan — maju satu karakter
+	"l":    "\x1b[D", // panah kiri
+	"home": "\x1b[H", // awal baris
+	"end":  "\x1b[F", // akhir baris
+	"t":    "\t",     // Tab — pelengkapan perintah
+	"esc":  "\x1b",   // Esc — batalkan/mode vi
+	"en":   "\r",     // Enter — jalankan perintah
+}
+
+// SendRawKey menulis urutan kunci apa adanya ke PTY tanpa menambah newline
+// dan tanpa membersihkan layar — dipakai tombol panah/Tab/Esc, di mana
+// newline akan merusak baris perintah yang sedang diedit.
+func SendRawKey(userID int64, seq string) error {
+	termSessionsMu.Lock()
+	s, ok := termSessions[userID]
+	if ok {
+		s.LastUsed = time.Now()
+	}
+	termSessionsMu.Unlock()
+	if !ok {
+		return fmt.Errorf("tidak ada sesi terminal aktif")
+	}
+
+	s.Mu.Lock()
+	alive := s.Alive
+	master := s.Master
+	s.Mu.Unlock()
+	if !alive || master == nil {
+		return fmt.Errorf("sesi terminal sudah mati")
+	}
+
+	if _, err := master.WriteString(seq); err != nil {
+		return fmt.Errorf("gagal menulis ke PTY: %w", err)
+	}
+	return nil
+}
+
+// SendToTerminal menulis input ke PTY dan membersihkan layar tampilan
 func SendToTerminal(userID int64, input string) error {
 	termSessionsMu.Lock()
 	s, ok := termSessions[userID]
@@ -1003,15 +1059,22 @@ func RenderTerminal(userID int64) (string, *tg.InlineKeyboardMarkup) {
 	kb := &tg.InlineKeyboardMarkup{
 		InlineKeyboard: [][]tg.InlineKeyboardButton{
 			{
-				{Text: "🔄 Refresh", CallbackData: "tm:r"},
-				{Text: "🛑 Ctrl+C", CallbackData: "tm:c"},
+				{Text: "⬆️", CallbackData: "tm:u"},
+				{Text: "⬇️", CallbackData: "tm:d"},
+				{Text: "🔄", CallbackData: "tm:r"},
+				{Text: "🛑 ^C", CallbackData: "tm:c"},
 			},
 			{
-				{Text: "📋 Info Sesi", CallbackData: "tm:i"},
-				{Text: "💀 Tutup Sesi", CallbackData: "tm:k"},
+				{Text: "⬅️", CallbackData: "tm:l"},
+				{Text: "➡️", CallbackData: "tm:rt"},
+				{Text: "📋 Info", CallbackData: "tm:i"},
+				{Text: "💀 Tutup", CallbackData: "tm:k"},
 			},
 			{
-				{Text: "🏠 Menu Utama", CallbackData: "tm:h"},
+				{Text: "Tab ⇥", CallbackData: "tm:t"},
+				{Text: "Enter ⏎", CallbackData: "tm:en"},
+				{Text: "Esc", CallbackData: "tm:esc"},
+				{Text: "🏠", CallbackData: "tm:h"},
 			},
 		},
 	}
@@ -1041,6 +1104,14 @@ func TerminalHelpText() string {
 		"• <code>/term log</code> — log penuh (dikirim sebagai file)\n" +
 		"• <code>/term kill</code> — matikan sesi\n" +
 		"• <code>/term info</code> — status sesi\n\n" +
+		"<b>Tombol kunci:</b>\n" +
+		"• ⬆️ ⬇️ — riwayat perintah (seperti panah atas/bawah)\n" +
+		"• ⬅️ ➡️ — geser kursor di baris perintah\n" +
+		"• <code>Tab</code> — pelengkapan nama perintah/path\n" +
+		"• <code>Enter</code> — jalankan perintah yang sedang ditulis\n" +
+		"• <code>Esc</code> — batalkan (atau keluar mode vi)\n" +
+		"• <code>^C</code> — hentikan proses di depan\n" +
+		"• 🔄 — gambar ulang layar\n\n" +
 		"<b>Mode input langsung:</b> setelah sesi dibuka, kirim teks apa pun " +
 		"(tanpa garis miring) ke chat dan teks itu masuk ke stdin shell.\n" +
 		"Aktifkan dengan <code>/term mode on</code>, matikan dengan <code>/term mode off</code>.\n\n" +

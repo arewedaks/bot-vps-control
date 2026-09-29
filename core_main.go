@@ -1250,6 +1250,25 @@ func main() {
 
 	loadConfig()
 
+	// Kunci instance diambil PALING AWAL, sebelum satu pun panggilan jaringan.
+	//
+	// Sebelumnya kunci diambil setelah telegramGetMe() dan deleteWebhook(),
+	// jadi instance kedua yang dijalankan bersamaan sempat: memanggil API
+	// Telegram, menghapus webhook atas nama token yang sama, lalu baru
+	// ditolak. Tidak ada kerusakan data, tapi hasilnya tidak deterministik —
+	// siapa yang menang bergantung pada siapa selesai lebih cepat.
+	//
+	// Menaruhnya di sini membuat proses kedua berhenti seketika, tanpa
+	// menyentuh apa pun di luar mesin ini.
+	if err := kunciInstance(); err != nil {
+		fmt.Printf("❌ %v\n\n", err)
+		fmt.Println("   Bot lain dengan token yang sama sudah berjalan.")
+		fmt.Println("   Hentikan dulu, lalu jalankan yang ini:")
+		fmt.Println("       pkill -x core_engine")
+		fmt.Println("       systemctl restart bot-vps")
+		os.Exit(1)
+	}
+
 	fmt.Println("==============================================================")
 	fmt.Printf("🤖 Bot VPS Engine %s (Interactive File Manager Edition)...\n", Versi)
 	// Jangan pernah cetak token, bahkan sebagian: prefix token cukup untuk
@@ -1313,25 +1332,6 @@ func main() {
 	// journald, atau layanan pengumpul log pihak ketiga — identitas akun
 	// tidak ada gunanya di sana dan hanya menambah permukaan bocor.
 	fmt.Println("🤖 Terhubung ke Telegram.")
-
-	// Kunci instance SEBELUM notifikasi apa pun dikirim.
-	//
-	// Dua proses dengan token sama akan berebut pesan: Telegram long polling
-	// hanya memberi satu update ke satu pemanggil, jadi perintah bisa mendarat
-	// di instance yang salah. Gejalanya menipu — /sysinfo menjawab spesifikasi
-	// mesin lain, atau bot kadang diam.
-	//
-	// Urutan ini penting: kalau notifikasi dikirim lebih dulu, instance kedua
-	// sudah terlanjur mengirim pesan startup sebelum ditolak. Pengguna melihat
-	// dua notifikasi dari satu bot dan bingung mana yang benar.
-	if err := kunciInstance(); err != nil {
-		fmt.Printf("❌ %v\n\n", err)
-		fmt.Println("   Bot lain dengan token yang sama sudah berjalan.")
-		fmt.Println("   Hentikan dulu, lalu jalankan yang ini:")
-		fmt.Println("       pkill -x core_engine")
-		fmt.Println("       systemctl restart bot-vps")
-		os.Exit(1)
-	}
 
 	for adminID := range AdminIDs {
 		sendTelegram(adminID, startupMsg)

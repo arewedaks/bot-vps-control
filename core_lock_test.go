@@ -72,60 +72,70 @@ func TestSidikJariBerbedaPerToken(t *testing.T) {
 
 // TestKunciInstanceMenolakInstanceKedua adalah inti pengaman ini.
 //
-// Menjalankan dua proses dengan token yang sama harus ditolak, dan proses
-// pertama TIDAK boleh terganggu.
+// TestKunciInstanceMenolakInstanceKedua memastikan instance kedua ditolak
+// saat kunci sedang dipegang proses lain.
+//
+// Kenapa kuncinya dipegang dari LUAR, bukan oleh bot-1:
+//
+// Versi lama menjalankan bot-1 dengan token asli dari .env lalu mengharapkannya
+// memegang kunci. Itu punya dua cacat yang saling menutupi:
+//
+//  1. Tanpa token valid (di CI, atau setelah token di-revoke) bot-1 keluar di
+//     getMe dan tidak pernah mengambil kunci. Tes lalu "lulus" karena proses
+//     kedua juga keluar sendiri — padahal kuncinya tidak pernah diuji.
+//  2. Karena bot-1 mati, kunci dilepas kernel, jadi proses kedua justru boleh
+//     jalan: hasilnya bergantung pada token .env, bukan pada kunci.
+//
+// Dengan memegang kunci langsung lewat flock(2), tes ini:
+//   - tidak butuh token valid, jadi benar-benar berjalan di CI
+//   - tidak bisa lulus karena alasan lain
 func TestKunciInstanceMenolakInstanceKedua(t *testing.T) {
-	// Kunci hanya bisa diuji dari proses terpisah: flock bersifat per-proses,
-	// jadi memanggil kunciInstance() dua kali di test yang sama tidak akan
-	// saling menolak.
 	if testing.Short() {
-		t.Skip("SKIP — butuh menjalankan proses terpisah")
+		t.Skip("SKIP — butuh menjalankan binary terpisah")
 	}
+
+	const tokenPalsu = "000000:TOKEN_PALSU_UNTUK_UJI_KUNCI"
+
+	// Binary menghitung sidik jari dari BOT_TOKEN di .env-nya, jadi proses
+	// test ini harus memakai token yang sama untuk memegang berkas kunci
+	// yang tepat.
+	asli := BotToken
+	BotToken = tokenPalsu
+	t.Cleanup(func() { BotToken = asli })
+
+	lepas := pegangKunci(t)
+	defer lepas()
 
 	biner := buildBinerUji(t)
-	token := bacaTokenDariEnv(t)
-	if token == "" {
-		t.Skip("SKIP — BOT_TOKEN tidak ada di .env")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"),
+		[]byte("BOT_TOKEN="+tokenPalsu+"\nADMIN_IDS=1\n"), 0o600); err != nil {
+		t.Fatalf("tulis .env uji: %v", err)
 	}
 
-	// Proses 1: jalankan dan biarkan hidup.
-	cmd1 := exec.Command(biner)
-	cmd1.Env = append(os.Environ(), "BOT_TOKEN="+token)
-	cmd1.Dir = tempDirDenganEnv(t, token)
-	if err := cmd1.Start(); err != nil {
-		t.Fatalf("gagal menjalankan bot-1: %v", err)
-	}
-	defer func() {
-		cmd1.Process.Kill()
-		cmd1.Wait()
-	}()
-
-	// Beri waktu bot-1 mengambil kunci.
-	menunggu(2500)
-
-	// Proses 2: harus ditolak.
-	//
-	// Diberi timeout: kalau kuncinya TIDAK bekerja, bot-2 akan berjalan
-	// selamanya (long polling) dan test ini menggantung sampai batas Go
-	// 10 menit. Timeout mengubah kegagalan kunci menjadi test yang cepat
-	// dan jelas, bukan hang yang membingungkan.
-	out, err := jalankanDenganTimeout(t, biner, tempDirDenganEnv(t, token), token, 8*time.Second)
-
+	// Diberi timeout: kalau kunci TIDAK bekerja, bot akan berjalan selamanya
+	// (long polling) dan tes menggantung sampai batas Go 10 menit. Timeout
+	// mengubah kegagalan kunci menjadi tes yang cepat dan jelas.
+	out, err := jalankanDenganTimeout(t, biner, dir, tokenPalsu, 8*time.Second)
 	if err == nil {
-		t.Fatal("❌ instance kedua tidak ditolak — inilah bug yang bikin /sysinfo salah mesin")
+		t.Fatal("❌ instance kedua BERJALAN padahal kunci sedang dipegang — " +
+			"inilah bug yang bikin /sysinfo menjawab mesin yang salah")
 	}
+
 	teks := string(out)
 	if !strings.Contains(teks, "Instance lain") {
-		t.Errorf("pesan penolakan tidak jelas:\n%s", teks)
+		t.Fatalf("pesan penolakan tidak jelas:\n%s", teks)
 	}
 	t.Logf("✅ Instance kedua ditolak: %s",
 		strings.TrimSpace(barisTemukan(teks, "Instance lain")))
 
-	// Proses 1 harus masih hidup.
-	if cmd1.ProcessState != nil {
-		t.Error("❌ proses pertama ikut mati")
+	// Yang paling penting: penolakan terjadi SEBELUM jaringan. Munculnya pesan
+	// getMe berarti kunci masih diambil terlalu lambat.
+	if strings.Contains(teks, "Token bot ditolak Telegram") {
+		t.Error("❌ kunci diperiksa SETELAH panggilan ke Telegram — " +
+			"instance kedua sudah menyentuh API Telegram sebelum ditolak")
 	} else {
-		t.Log("✅ Proses pertama tidak terganggu")
+		t.Log("✅ Ditolak sebelum menyentuh API Telegram")
 	}
 }
 

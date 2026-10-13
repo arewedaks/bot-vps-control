@@ -79,24 +79,82 @@ Shell **persisten** dengan TTY asli — bukan sekadar eksekusi perintah sekali j
 
 ## 🚀 Mulai Cepat
 
+### Siapkan token & user ID
+
+Dua nilai ini dibutuhkan sebelum instalasi:
+
+| Nilai | Cara mendapatkannya |
+|---|---|
+| `BOT_TOKEN` | Chat [@BotFather](https://t.me/BotFather) → `/newbot` → salin token |
+| `ADMIN_IDS` | Chat [@userinfobot](https://t.me/userinfobot) → salin angka `Id` |
+
+Ganti nilai di contoh-contoh di bawah dengan milikmu.
+
 ### Instalasi satu baris (VPS produksi — disarankan)
 
 ```bash
 sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU sh -c "$(curl -fsSL https://raw.githubusercontent.com/arewedaks/bot-vps-control/master/install.sh)"
 ```
 
-Satu baris ini mengunduh binary, memverifikasi checksum, memasang service
-systemd, mengisi konfigurasi dari env var, dan langsung menghidupkan bot.
-Ganti `TOKENMU` dengan token dari @BotFather dan `USERIDMU` dengan User ID
-Telegram kamu (cek lewat @userinfobot).
+Satu baris ini mengunduh binary dari GitHub Releases, memverifikasi checksum
+(bila `SHA256SUMS` tersedia), mengisi `/etc/bot-vps.env` dari env var, dan
+— **hanya bila systemd ada** — memasang service lalu menghidupkan bot.
 
-Bila ingin mengisi token belakangan (tanpa env var), jalankan tanpa env:
+> **Ingin membaca dulu sebelum menjalankan sebagai root?** Pola `curl | sh`
+memberi root skrip yang belum kamu lihat. Pisahkan unduhan dari eksekusi:
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/arewedaks/bot-vps-control/master/install.sh -o /tmp/install.sh
+> less /tmp/install.sh                          # periksa isinya
+> sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU sh /tmp/install.sh
+> ```
+
+#### Bila `/etc/bot-vps.env` sudah ada
+
+Installer **hanya menulis konfigurasi bila berkasnya belum ada**. Kalau kamu
+pernah menjalankan installer sebelumnya, `BOT_TOKEN` dan `ADMIN_IDS` dari env
+var akan diabaikan, dan kamu melihat peringatan *"BOT_TOKEN belum terisi"*
+meski sudah mengirimkannya. Hapus dulu berkasnya:
+
+```bash
+sudo rm -f /etc/bot-vps.env
+```
+
+#### Bila ingin mengisi token belakangan (tanpa env var)
 
 ```bash
 sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/arewedaks/bot-vps-control/master/install.sh)"
-nano /etc/bot-vps.env                 # isi BOT_TOKEN dan ADMIN_IDS
+sudo nano /etc/bot-vps.env            # isi BOT_TOKEN dan ADMIN_IDS
 sudo systemctl enable --now bot-vps
 ```
+
+### VPS tanpa systemd (container / LXC / WSL)
+
+Installer mendeteksi systemd lewat `/run/systemd/system`. Bila tidak ada, ia
+melewati pemasangan service dan hanya memasang binary — **bot tidak menyala
+otomatis**, dan proses yang dijalankan langsung dari sesi SSH akan mati saat
+kamu logout. Jalankan dengan `setsid nohup` supaya tahan logout:
+
+```bash
+sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU sh /tmp/install.sh
+
+# jalankan terlepas dari sesi SSH, tulis log ke berkas
+sudo sh -c 'setsid nohup /usr/local/bin/core_engine >>/var/log/bot-vps.log 2>&1 &'
+
+# verifikasi
+pgrep -af core_engine
+tail -f /var/log/bot-vps.log
+```
+
+Untuk menyalakan ulang otomatis setelah reboot pada lingkungan tanpa systemd,
+tambahkan ke crontab root:
+
+```bash
+sudo crontab -l 2>/dev/null | { cat; echo '@reboot setsid nohup /usr/local/bin/core_engine >>/var/log/bot-vps.log 2>&1 &'; } | sudo crontab -
+```
+
+Installer juga dapat dipengaruhi lewat env var opsional: `INSTALL_DIR`
+(default `/usr/local/bin`) dan `VERSION` (default `latest`).
 
 ### Dari source (untuk pengembangan)
 
@@ -118,12 +176,30 @@ Bot akan mengirim notifikasi ke chat kamu saat berhasil terhubung.
 
 ### Menjalankan sebagai service (systemd)
 
+Installer satu baris sudah melakukan ini secara otomatis bila systemd ada.
+Langkah manual berikut berguna kalau kamu build dari source atau ingin
+memasang ulang unit-nya:
+
 ```bash
 sudo cp bot-vps.service /etc/systemd/system/
 sudo nano /etc/systemd/system/bot-vps.service   # sesuaikan WorkingDirectory
+sudo systemctl daemon-reload
 sudo systemctl enable --now bot-vps
 sudo systemctl status bot-vps
 ```
+
+### Verifikasi instalasi
+
+```bash
+cat /etc/bot-vps.env                       # BOT_TOKEN dan ADMIN_IDS harus terisi
+/usr/local/bin/core_engine --help 2>&1 | head -5
+pgrep -af core_engine                      # proses harus berjalan
+sudo systemctl status bot-vps              # hanya bila systemd ada
+```
+
+Setelah bot berjalan, kirim `/start` ke bot di Telegram. Bila tidak ada balasan,
+periksa log: `journalctl -u bot-vps -f` (systemd) atau `tail -f /var/log/bot-vps.log`
+(tanpa systemd).
 
 ---
 

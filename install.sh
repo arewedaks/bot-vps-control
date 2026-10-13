@@ -62,41 +62,63 @@ fi
 install -m 0755 "$TMP" "${DEST}/${BIN}"
 log "✅ Terpasang: ${DEST}/${BIN}"
 
-# Hanya buat service bila systemd benar-benar ada, agar tidak merusak
-# lingkungan kontainer yang tidak punya systemd.
-if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-    log "🔧 Menyiapkan service systemd..."
-    install -d -m 0755 /var/lib/bot-vps-control
-    curl -fsSL -o /etc/systemd/system/bot-vps.service \
-        "https://raw.githubusercontent.com/${REPO}/master/bot-vps.service" \
-        || log "⚠️  Gagal mengunduh bot-vps.service — lewati (sudah ada unit sistem?)"
+# ---------------------------------------------------------------- konfigurasi
+# Ditulis di luar cabang systemd: init system tidak ada hubungannya dengan
+# penyimpanan konfigurasi. Kalau ini diletakkan di dalam 'if systemd', kontainer
+# tanpa systemd akan kehilangan BOT_TOKEN tanpa pesan apa pun.
+ENVF=/etc/bot-vps.env
+if [ ! -f "$ENVF" ]; then
+    : > "$ENVF"
+fi
+chmod 600 "$ENVF"
 
-    # Konfigurasi bisa dikirim langsung lewat env var, supaya satu baris
-    # instalasi langsung menghidupkan bot tanpa edit manual:
-    #   sudo env BOT_TOKEN=... ADMIN_IDS=... sh -c "$(curl -fsSL ...)"
-    # Tanpa keduanya, /etc/bot-vps.env dibuat kosong sebagai templat.
-    if [ ! -f /etc/bot-vps.env ]; then
-        : > /etc/bot-vps.env
-        chmod 600 /etc/bot-vps.env
-        [ -n "${BOT_TOKEN:-}" ] && printf 'BOT_TOKEN=%s\n' "$BOT_TOKEN" >> /etc/bot-vps.env
-        [ -n "${ADMIN_IDS:-}" ] && printf 'ADMIN_IDS=%s\n' "$ADMIN_IDS" >> /etc/bot-vps.env
-        [ -n "${DEPLOY_DIR:-}" ] && printf 'DEPLOY_DIR=%s\n' "$DEPLOY_DIR" >> /etc/bot-vps.env
-    fi
+# Isi hanya baris yang belum ada, agar token lama tidak tertimpa dan env var
+# yang dikirim ulang pada installer kedua tetap terpakai.
+set_kv() {
+    _k="$1"; _v="${2:-}"
+    [ -n "$_v" ] || return 0
+    grep -q "^${_k}=" "$ENVF" && return 0
+    printf '%s=%s\n' "$_k" "$_v" >>"$ENVF"
+    log "✅ ${_k} disimpan ke ${ENVF}"
+}
+set_kv BOT_TOKEN "${BOT_TOKEN:-}"
+set_kv ADMIN_IDS "${ADMIN_IDS:-}"
+set_kv DEPLOY_DIR "${DEPLOY_DIR:-}"
 
-    if ! grep -q '^BOT_TOKEN=' /etc/bot-vps.env; then
-        log ""
-        log "⚠️  BOT_TOKEN belum terisi. Lengkapi lalu hidupkan:"
-        log "      nano /etc/bot-vps.env        # isi BOT_TOKEN dan ADMIN_IDS"
-        log "      systemctl enable --now bot-vps"
-        log ""
-        log "Lokasi proyek akan dipakai: \${DEPLOY_DIR:-/var/lib/bot-vps-control/berkas}"
-    else
+# ---------------------------------------------------------------- jalankan
+if grep -q '^BOT_TOKEN=' "$ENVF"; then
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        log "🔧 Menyiapkan service systemd..."
+        install -d -m 0755 /var/lib/bot-vps-control
+        curl -fsSL -o /etc/systemd/system/bot-vps.service \
+            "https://raw.githubusercontent.com/${REPO}/master/bot-vps.service" \
+            || log "⚠️  Gagal mengunduh bot-vps.service — lewati (sudah ada unit sistem?)"
         systemctl daemon-reload
         systemctl enable --now bot-vps
         log "✅ Service berjalan: systemctl status bot-vps"
+    else
+        # Tanpa systemd (container/LXC/WSL) bot tidak akan menyala sendiri.
+        # setsid melepasnya dari sesi SSH supaya tahan logout.
+        if pgrep -x "$BIN" >/dev/null 2>&1; then
+            log "ℹ️  $BIN sudah berjalan — dilewati"
+        else
+            install -d -m 0755 /var/lib/bot-vps-control
+            setsid nohup "${DEST}/${BIN}" >>/var/log/bot-vps.log 2>&1 &
+            sleep 2
+            if pgrep -x "$BIN" >/dev/null 2>&1; then
+                log "✅ Berjalan di latar (systemd tidak ada). Log: /var/log/bot-vps.log"
+            else
+                log "⚠️  Gagal start — cek: tail -20 /var/log/bot-vps.log"
+            fi
+        fi
+        log "ℹ️  Nyala ulang saat reboot: pasang @reboot crontab (lihat README)"
     fi
 else
-    log "ℹ️  systemd tidak terdeteksi — service tidak dipasang."
+    log ""
+    log "⚠️  BOT_TOKEN belum terisi. Lengkapi lalu jalankan:"
+    log "      nano ${ENVF}        # isi BOT_TOKEN dan ADMIN_IDS"
+    log "      ${DEST}/${BIN}"
+    log ""
 fi
 
 log ""

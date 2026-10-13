@@ -58,8 +58,12 @@ var (
 func loadConfig() {
 	AdminIDs = make(map[int64]bool)
 
-	// Baca file .env jika ada di direktori kerja
+	// Baca .env di direktori kerja; kalau tidak ada, pakai konfigurasi sistem.
+	// Container tanpa systemd tidak punya EnvironmentFile, jadi tanpa baris
+	// kedua /etc/bot-vps.env tidak akan pernah terbaca. loadDotEnv tidak
+	// menimpa variabel yang sudah diset, sehingga .env lokal tetap menang.
 	loadDotEnv(".env")
+	loadDotEnv("/etc/bot-vps.env")
 
 	// Ambil Token Bot
 	BotToken = strings.TrimSpace(os.Getenv("BOT_TOKEN"))

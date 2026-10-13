@@ -97,8 +97,17 @@ sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU sh -c "$(curl -fsSL https://raw.gi
 ```
 
 Satu baris ini mengunduh binary dari GitHub Releases, memverifikasi checksum
-(bila `SHA256SUMS` tersedia), mengisi `/etc/bot-vps.env` dari env var, dan
-— **hanya bila systemd ada** — memasang service lalu menghidupkan bot.
+(bila `SHA256SUMS` tersedia), menyimpan `BOT_TOKEN`/`ADMIN_IDS` ke
+`/etc/bot-vps.env` dari env var, lalu menghidupkan bot:
+
+- **Bila systemd ada** — memasang service `bot-vps` dan mengaktifkannya.
+- **Bila systemd tidak ada** (container/LXC/WSL) — menjalankan bot langsung
+dengan `setsid nohup`, tahan logout. Lihat [VPS tanpa systemd](#vps-tanpa-systemd-container--lxc--wsl)
+  untuk cara menyalakannya ulang setelah reboot.
+
+> **Catatan rilis.** Biner diunduh dari rilis terakhir GitHub. Bila kamu baru
+> saja memperbaiki kode dan belum memotong tag, pakai `VERSION=<tag>` untuk
+> memilih rilis tertentu, atau jalankan langsung biner hasil build sendiri.
 
 > **Ingin membaca dulu sebelum menjalankan sebagai root?** Pola `curl | sh`
 memberi root skrip yang belum kamu lihat. Pisahkan unduhan dari eksekusi:
@@ -111,13 +120,15 @@ memberi root skrip yang belum kamu lihat. Pisahkan unduhan dari eksekusi:
 
 #### Bila `/etc/bot-vps.env` sudah ada
 
-Installer **hanya menulis konfigurasi bila berkasnya belum ada**. Kalau kamu
-pernah menjalankan installer sebelumnya, `BOT_TOKEN` dan `ADMIN_IDS` dari env
-var akan diabaikan, dan kamu melihat peringatan *"BOT_TOKEN belum terisi"*
-meski sudah mengirimkannya. Hapus dulu berkasnya:
+Installer **tidak menimpa nilai yang sudah tersimpan**. Kalau kamu pernah
+menjalankan installer sebelumnya dengan token berbeda, token lama tetap
+terpakai dan env var baru diabaikan. Sunting berkasnya langsung, atau hapus
+dulu agar installer mengisinya ulang:
 
 ```bash
-sudo rm -f /etc/bot-vps.env
+sudo nano /etc/bot-vps.env      # cara yang disarankan
+# atau
+sudo rm -f /etc/bot-vps.env     # lalu jalankan installer lagi
 ```
 
 #### Bila ingin mengisi token belakangan (tanpa env var)
@@ -130,20 +141,23 @@ sudo systemctl enable --now bot-vps
 
 ### VPS tanpa systemd (container / LXC / WSL)
 
-Installer mendeteksi systemd lewat `/run/systemd/system`. Bila tidak ada, ia
-melewati pemasangan service dan hanya memasang binary — **bot tidak menyala
-otomatis**, dan proses yang dijalankan langsung dari sesi SSH akan mati saat
-kamu logout. Jalankan dengan `setsid nohup` supaya tahan logout:
+Installer mendeteksi systemd lewat `/run/systemd/system`. Bila tidak ada, bot
+dijalankan langsung dengan `setsid nohup` supaya tahan logout, dan log ditulis
+ke `/var/log/bot-vps.log`:
 
 ```bash
 sudo env BOT_TOKEN=TOKENMU ADMIN_IDS=USERIDMU sh /tmp/install.sh
 
-# jalankan terlepas dari sesi SSH, tulis log ke berkas
-sudo sh -c 'setsid nohup /usr/local/bin/core_engine >>/var/log/bot-vps.log 2>&1 &'
-
 # verifikasi
 pgrep -af core_engine
 tail -f /var/log/bot-vps.log
+```
+
+Bila `pgrep` kosong, periksa lognya lebih dulu:
+
+```bash
+tail -20 /var/log/bot-vps.log
+sudo /usr/local/bin/core_engine      # jalankan di depan untuk melihat error
 ```
 
 Untuk menyalakan ulang otomatis setelah reboot pada lingkungan tanpa systemd,
@@ -152,6 +166,10 @@ tambahkan ke crontab root:
 ```bash
 sudo crontab -l 2>/dev/null | { cat; echo '@reboot setsid nohup /usr/local/bin/core_engine >>/var/log/bot-vps.log 2>&1 &'; } | sudo crontab -
 ```
+
+> Tanpa systemd, tidak ada proses yang menjalankan bot di latar. Bila kamu
+> menghentikannya dengan `pkill`, bot tidak akan hidup lagi sampai kamu
+> menjalankannya kembali atau mesin reboot (lewat crontab di atas).
 
 Installer juga dapat dipengaruhi lewat env var opsional: `INSTALL_DIR`
 (default `/usr/local/bin`) dan `VERSION` (default `latest`).
